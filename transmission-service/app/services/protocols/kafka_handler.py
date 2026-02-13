@@ -67,7 +67,7 @@ class KafkaHandler(ProtocolHandler):
                 # Phase 2 (5.3): Batching and compression for better throughput
                 "linger_ms": int(config.get("linger_ms", 20)),
                 "batch_size": int(config.get("batch_size", 65536)),
-                "compression_type": config.get("compression_type", "lz4"),
+                "compression_type": config.get("compression_type", "gzip") if config.get("compression_type", "gzip") not in ("none", "") else None,
             }
             
             # Add SSL/SASL if configured
