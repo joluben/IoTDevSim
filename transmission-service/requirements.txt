@@ -25,5 +25,8 @@ cryptography==46.0.0
 # Logging
 structlog==25.1.0
 
+# Monitoring (Phase 4)
+prometheus-client==0.21.1
+
 # Development utilities
 python-dotenv==1.0.1

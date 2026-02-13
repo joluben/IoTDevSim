@@ -54,7 +54,7 @@ async def test_half_open_after_recovery_timeout(breaker):
         await breaker.record_failure("conn-1", error_message="err")
 
     # Manually set state_changed_at to the past so recovery timeout has elapsed
-    async with breaker._lock:
+    async with breaker._get_lock("conn-1"):
         state, stats, oc = breaker._circuits["conn-1"]
         stats.state_changed_at = time.time() - 3.0  # > recovery_timeout (2s)
 
@@ -71,7 +71,7 @@ async def test_success_closes_circuit(breaker):
     assert await breaker.get_state("conn-1") == CircuitState.OPEN
 
     # Simulate time passing and probe success
-    async with breaker._lock:
+    async with breaker._get_lock("conn-1"):
         _, stats, _ = breaker._circuits["conn-1"]
         stats.state_changed_at = time.time() - 3.0
     await breaker.can_execute("conn-1")  # transitions to HALF_OPEN
@@ -85,7 +85,7 @@ async def test_success_closes_circuit(breaker):
 async def test_half_open_failure_reopens(breaker):
     for _ in range(3):
         await breaker.record_failure("conn-1", error_message="err")
-    async with breaker._lock:
+    async with breaker._get_lock("conn-1"):
         _, stats, _ = breaker._circuits["conn-1"]
         stats.state_changed_at = time.time() - 3.0
     await breaker.can_execute("conn-1")  # HALF_OPEN

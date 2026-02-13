@@ -46,9 +46,17 @@ class ConnectionPool:
         health_check_interval: float = 60.0,
     ):
         self._pool: Dict[str, PooledConnection] = {}
-        self._lock = asyncio.Lock()
+        # Phase 2 (5.5): Per-connection granular locks to reduce contention
+        self._locks: Dict[str, asyncio.Lock] = {}
+        self._global_lock = asyncio.Lock()  # Only for global operations (close_all, health_check_all)
         self._max_idle = max_idle_seconds
         self._health_interval = health_check_interval
+
+    def _get_lock(self, connection_id: str) -> asyncio.Lock:
+        """Get or create a per-connection lock. Phase 2 — 5.5."""
+        if connection_id not in self._locks:
+            self._locks[connection_id] = asyncio.Lock()
+        return self._locks[connection_id]
 
     # ── public API ──────────────────────────────────────────────
 
@@ -63,8 +71,10 @@ class ConnectionPool:
 
         If a healthy connection already exists for *connection_id* it is reused.
         Otherwise a new one is created.
+        Phase 2 (5.5): Uses per-connection lock instead of global lock.
         """
-        async with self._lock:
+        lock = self._get_lock(connection_id)
+        async with lock:
             existing = self._pool.get(connection_id)
             if existing and existing.is_healthy:
                 # Check if config has changed (e.g., bootstrap_servers, broker_url, etc.)
@@ -101,7 +111,8 @@ class ConnectionPool:
 
     async def invalidate(self, connection_id: str) -> None:
         """Remove and close a specific connection (e.g. after unrecoverable error)."""
-        async with self._lock:
+        lock = self._get_lock(connection_id)
+        async with lock:
             pooled = self._pool.pop(connection_id, None)
             if pooled:
                 await self._close_connection(pooled)
@@ -110,7 +121,7 @@ class ConnectionPool:
     async def health_check_all(self) -> Dict[str, bool]:
         """Run health checks on all pooled connections and return results."""
         results: Dict[str, bool] = {}
-        async with self._lock:
+        async with self._global_lock:
             for cid, pooled in list(self._pool.items()):
                 now = time.time()
 
@@ -139,10 +150,11 @@ class ConnectionPool:
 
     async def close_all(self) -> None:
         """Gracefully close every pooled connection."""
-        async with self._lock:
+        async with self._global_lock:
             for pooled in self._pool.values():
                 await self._close_connection(pooled)
             self._pool.clear()
+            self._locks.clear()
             logger.info("All pooled connections closed")
 
     def get_pool_stats(self) -> Dict[str, Any]:
@@ -307,6 +319,10 @@ class ConnectionPool:
             "acks": acks,
             "retries": int(config.get("retries", 3)),
             "retry_backoff_ms": int(config.get("retry_backoff_ms", 1000)),
+            # Phase 2 (5.3): Batching and compression for better throughput
+            "linger_ms": int(config.get("linger_ms", 20)),
+            "batch_size": int(config.get("batch_size", 65536)),
+            "compression_type": config.get("compression_type", "gzip") if config.get("compression_type", "gzip") not in ("none", "") else None,
         }
         if config.get("security_protocol"):
             producer_config["security_protocol"] = config["security_protocol"]

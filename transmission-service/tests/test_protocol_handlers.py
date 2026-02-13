@@ -36,10 +36,10 @@ class TestMQTTHandler:
             instance = MockClient.return_value
             instance.is_connected.return_value = True
 
-            # Simulate successful connect callback
+            # Simulate successful connect callback (paho-mqtt v2: 5 args)
             def fake_connect(host, port, keepalive):
                 if instance.on_connect:
-                    instance.on_connect(instance, None, {}, 0)
+                    instance.on_connect(instance, None, {}, 0, None)
 
             instance.connect.side_effect = fake_connect
             instance.loop_start = MagicMock()
@@ -53,7 +53,7 @@ class TestMQTTHandler:
 
             def fake_publish(topic, payload, qos, retain):
                 if instance.on_publish:
-                    instance.on_publish(instance, None, 42)
+                    instance.on_publish(instance, None, 42, 0, None)
                 return pub_info
 
             instance.publish.side_effect = fake_publish
@@ -121,9 +121,9 @@ class TestMQTTHandler:
         pub_info.rc = 0
 
         def fake_publish(topic, payload, qos, retain):
-            # Trigger on_publish callback
+            # Trigger on_publish callback (paho-mqtt v2: 5 args)
             if client.on_publish:
-                client.on_publish(client, None, 99)
+                client.on_publish(client, None, 99, 0, None)
             return pub_info
 
         client.publish.side_effect = fake_publish
@@ -171,7 +171,7 @@ class TestMQTTWebSocket:
 
             def fake_connect(host, port, keepalive):
                 if instance.on_connect:
-                    instance.on_connect(instance, None, {}, 0)
+                    instance.on_connect(instance, None, {}, 0, None)
 
             instance.connect.side_effect = fake_connect
             instance.loop_start = MagicMock()

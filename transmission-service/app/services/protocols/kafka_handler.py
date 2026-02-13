@@ -21,7 +21,6 @@ class KafkaHandler(ProtocolHandler):
     
     def __init__(self):
         super().__init__("KAFKA")
-        self._producers: Dict[str, Any] = {}  # Simple connection cache
     
     async def publish(
         self,
@@ -30,9 +29,10 @@ class KafkaHandler(ProtocolHandler):
         payload: Dict[str, Any],
         timeout: int = 30
     ) -> PublishResult:
-        """Publish message to Kafka topic"""
+        """Publish message to Kafka topic (ephemeral producer fallback)"""
         start_time = time.perf_counter()
         timestamp = datetime.now(timezone.utc)
+        producer = None
         
         try:
             # Lazy import kafka to avoid dependency issues
@@ -53,39 +53,36 @@ class KafkaHandler(ProtocolHandler):
             if isinstance(bootstrap_servers, str):
                 bootstrap_servers = bootstrap_servers.split(",")
             
-            producer_key = ",".join(bootstrap_servers)
-            
-            # Get or create producer
-            if producer_key not in self._producers:
-                # acks must be int (0, 1) or the string 'all'; DB may store '1' as str
-                raw_acks = config.get("acks", "all")
-                acks = int(raw_acks) if str(raw_acks).isdigit() else raw_acks
+            # acks must be int (0, 1) or the string 'all'; DB may store '1' as str
+            raw_acks = config.get("acks", "all")
+            acks = int(raw_acks) if str(raw_acks).isdigit() else raw_acks
 
-                producer_config = {
-                    "bootstrap_servers": bootstrap_servers,
-                    "value_serializer": lambda v: json.dumps(v).encode("utf-8"),
-                    "key_serializer": lambda k: k.encode("utf-8") if k else None,
-                    "acks": acks,
-                    "retries": int(config.get("retries", 3)),
-                    "retry_backoff_ms": int(config.get("retry_backoff_ms", 1000)),
-                }
-                
-                # Add SSL/SASL if configured
-                if config.get("security_protocol"):
-                    producer_config["security_protocol"] = config["security_protocol"]
-                if config.get("sasl_mechanism"):
-                    producer_config["sasl_mechanism"] = config["sasl_mechanism"]
-                    producer_config["sasl_plain_username"] = config.get("sasl_username", "")
-                    producer_config["sasl_plain_password"] = config.get("sasl_password", "")
-                
-                loop = asyncio.get_running_loop()
-                producer = await loop.run_in_executor(
-                    None, 
-                    lambda: KafkaProducer(**producer_config)
-                )
-                self._producers[producer_key] = producer
+            producer_config = {
+                "bootstrap_servers": bootstrap_servers,
+                "value_serializer": lambda v: json.dumps(v).encode("utf-8"),
+                "key_serializer": lambda k: k.encode("utf-8") if k else None,
+                "acks": acks,
+                "retries": int(config.get("retries", 3)),
+                "retry_backoff_ms": int(config.get("retry_backoff_ms", 1000)),
+                # Phase 2 (5.3): Batching and compression for better throughput
+                "linger_ms": int(config.get("linger_ms", 20)),
+                "batch_size": int(config.get("batch_size", 65536)),
+                "compression_type": config.get("compression_type", "gzip") if config.get("compression_type", "gzip") not in ("none", "") else None,
+            }
             
-            producer = self._producers[producer_key]
+            # Add SSL/SASL if configured
+            if config.get("security_protocol"):
+                producer_config["security_protocol"] = config["security_protocol"]
+            if config.get("sasl_mechanism"):
+                producer_config["sasl_mechanism"] = config["sasl_mechanism"]
+                producer_config["sasl_plain_username"] = config.get("sasl_username", "")
+                producer_config["sasl_plain_password"] = config.get("sasl_password", "")
+            
+            loop = asyncio.get_running_loop()
+            producer = await loop.run_in_executor(
+                None, 
+                lambda: KafkaProducer(**producer_config)
+            )
             
             # Send message
             key = config.get("key")
@@ -131,6 +128,14 @@ class KafkaHandler(ProtocolHandler):
                 error_code=error_code or "KAFKA_ERROR",
                 details={"exception": str(e)}
             )
+        finally:
+            # Close ephemeral producer (Phase 1 — 5.8: no more internal cache)
+            if producer:
+                try:
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, producer.close, 5)
+                except Exception:
+                    pass
     
     async def publish_pooled(
         self,
@@ -193,10 +198,5 @@ class KafkaHandler(ProtocolHandler):
         return True
     
     def cleanup(self):
-        """Close all cached producers"""
-        for producer in self._producers.values():
-            try:
-                producer.close()
-            except Exception:
-                pass
-        self._producers.clear()
+        """Cleanup handler resources (no-op: producers managed by ConnectionPool)"""
+        pass
