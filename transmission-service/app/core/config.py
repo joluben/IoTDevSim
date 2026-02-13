@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     
     # Database (shared with API service)
     DATABASE_URL: str = Field(..., description="PostgreSQL database URL")
-    DB_POOL_SIZE: int = Field(default=5, description="Database connection pool size")
-    DB_MAX_OVERFLOW: int = Field(default=10, description="Database max overflow connections")
+    DB_POOL_SIZE: int = Field(default=10, description="Database connection pool size")
+    DB_MAX_OVERFLOW: int = Field(default=20, description="Database max overflow connections")
     DB_POOL_TIMEOUT: int = Field(default=30, description="Database pool timeout in seconds")
     DB_POOL_RECYCLE: int = Field(default=3600, description="Database pool recycle time in seconds")
     

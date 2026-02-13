@@ -10,9 +10,12 @@ import time
 import structlog
 from contextlib import asynccontextmanager
 
+from prometheus_client import make_asgi_app
+
 from app.core.config import settings
 from app.core.database import engine, check_database_health
 from app.core.logging import setup_logging
+from app.core.metrics import SERVICE_INFO
 from app.api.v1.router import api_router
 from app.services.transmission_manager import transmission_manager
 
@@ -27,6 +30,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting IoTDevSim Transmission Service", version="1.0.0")
     
+    # Phase 4: Set service build info
+    SERVICE_INFO.info({
+        "version": "1.0.0",
+        "environment": settings.ENVIRONMENT,
+        "service": "iotdevsim-transmission",
+    })
+
     # Start transmission manager
     await transmission_manager.start()
     
@@ -66,6 +76,10 @@ if settings.CORS_ORIGINS:
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
+
+# Phase 4: Mount Prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 @app.get("/health")

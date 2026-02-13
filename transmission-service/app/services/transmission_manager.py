@@ -10,8 +10,9 @@ import random
 import json
 import csv
 import os
+import sys
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,8 +24,26 @@ from app.models import Connection, Device, TransmissionLog
 from app.services.protocols import protocol_registry, PublishResult
 from app.services.connection_pool import ConnectionPool
 from app.services.circuit_breaker import CircuitBreaker, CircuitState
+from app.core.metrics import (
+    MESSAGES_TOTAL, TRANSMISSION_LATENCY, BYTES_TRANSMITTED,
+    ACTIVE_DEVICES, ACTIVE_CONNECTIONS,
+    DB_QUERIES_TOTAL, DB_QUERY_DURATION,
+    CACHE_HITS, CACHE_MISSES,
+    CONCURRENT_TRANSMISSIONS, TRANSMISSION_LOOP_DURATION,
+    DEVICE_MONITOR_DURATION,
+)
 
 logger = structlog.get_logger()
+
+# Phase 1 (5.7): Static import of encryption module at startup
+if '/workspace/api-service' not in sys.path:
+    sys.path.insert(0, '/workspace/api-service')
+try:
+    from app.core.encryption import decrypt_connection_config as _decrypt_connection_config
+    _HAS_ENCRYPTION = True
+except ImportError:
+    _HAS_ENCRYPTION = False
+    _decrypt_connection_config = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -36,6 +55,15 @@ class TransmissionStats:
     active_connections: int = 0
     bytes_transmitted: int = 0
     start_time: float = 0
+
+
+@dataclass
+class CachedDataset:
+    """Cache entry for a loaded dataset file (Phase 2 — 5.1)"""
+    rows: List[Dict[str, Any]]
+    file_hash: str  # mtime:size for fast invalidation
+    loaded_at: float
+    file_path: str
 
 
 @dataclass
@@ -85,6 +113,21 @@ class TransmissionManager:
             recovery_timeout=TRANSMISSION_CONFIG.get("retry_delay", 30),
             max_recovery_timeout=300.0,
         )
+
+        # Performance: Connection config cache with TTL (Phase 1 — 5.2)
+        self._connection_cache: Dict[str, Tuple[Any, float]] = {}  # conn_id → (Connection, timestamp)
+        self._CONNECTION_CACHE_TTL = 30.0  # seconds
+
+        # Performance: Dataset file cache with hash invalidation (Phase 2 — 5.1)
+        self._dataset_cache: Dict[str, CachedDataset] = {}  # dataset_id → CachedDataset
+        self._DATASET_CACHE_TTL = 60.0  # seconds
+
+        # Phase 3 (5.6): Concurrency semaphore for parallel device transmission
+        self._transmit_semaphore = asyncio.Semaphore(
+            TRANSMISSION_CONFIG.get("max_connections", 1000)
+        )
+        # Phase 3: Device monitor interval (reduced from 5s to 15s)
+        self._DEVICE_MONITOR_INTERVAL = 15.0
 
     async def start(self):
         """Start the transmission manager"""
@@ -137,6 +180,10 @@ class TransmissionManager:
         # Close all pooled connections
         await self.connection_pool.close_all()
         await self.circuit_breaker.reset_all()
+
+        # Clear performance caches
+        self._connection_cache.clear()
+        self._dataset_cache.clear()
 
         logger.info("Transmission manager stopped")
 
@@ -242,17 +289,39 @@ class TransmissionManager:
     # ==================== Core Loops ====================
 
     async def _transmission_loop(self):
-        """Main loop: iterate over active devices and transmit when due"""
-        logger.info("Starting transmission loop")
+        """Main loop: dispatch concurrent transmissions via asyncio.gather + semaphore (Phase 3 — 5.6)"""
+        logger.info("Starting transmission loop (concurrent mode)")
         try:
             while self.running:
                 try:
                     now = time.time()
+                    due_devices: List[DeviceTransmissionState] = []
                     for dev_id, state in list(self.active_devices.items()):
                         if now - state.last_transmission >= state.frequency + state.next_jitter:
-                            await self._transmit_for_device(state)
-                            state.last_transmission = now
-                            state.next_jitter = (random.randint(0, state.jitter_ms) / 1000) if state.jitter_ms > 0 else 0
+                            due_devices.append(state)
+
+                    if due_devices:
+                        tick_start = time.perf_counter()
+                        CONCURRENT_TRANSMISSIONS.set(len(due_devices))
+
+                        # Phase 3 (5.6): Transmit all due devices concurrently with semaphore
+                        async def _guarded_transmit(s: DeviceTransmissionState):
+                            async with self._transmit_semaphore:
+                                try:
+                                    await self._transmit_for_device(s)
+                                    s.last_transmission = time.time()
+                                    s.next_jitter = (random.randint(0, s.jitter_ms) / 1000) if s.jitter_ms > 0 else 0
+                                except Exception as e:
+                                    logger.error("Device transmission error",
+                                                 device=s.device_ref, error=str(e))
+
+                        await asyncio.gather(
+                            *[_guarded_transmit(s) for s in due_devices],
+                            return_exceptions=True,
+                        )
+
+                        CONCURRENT_TRANSMISSIONS.set(0)
+                        TRANSMISSION_LOOP_DURATION.observe(time.perf_counter() - tick_start)
 
                     await asyncio.sleep(0.25)  # 250ms tick
 
@@ -267,18 +336,22 @@ class TransmissionManager:
             logger.info("Transmission loop stopped")
 
     async def _device_monitor(self):
-        """Periodically refresh the list of transmitting devices"""
-        logger.info("Starting device monitor")
+        """Periodically refresh the list of transmitting devices (Phase 3: 15s interval)"""
+        logger.info("Starting device monitor", interval=self._DEVICE_MONITOR_INTERVAL)
         try:
             while self.running:
                 try:
+                    monitor_start = time.perf_counter()
                     await self._update_active_devices()
-                    await asyncio.sleep(5)
+                    DEVICE_MONITOR_DURATION.observe(time.perf_counter() - monitor_start)
+                    ACTIVE_DEVICES.set(len(self.active_devices))
+                    ACTIVE_CONNECTIONS.set(self.stats.active_connections)
+                    await asyncio.sleep(self._DEVICE_MONITOR_INTERVAL)
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
                     logger.error("Device monitor error", error=str(e))
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(self._DEVICE_MONITOR_INTERVAL)
         except asyncio.CancelledError:
             pass
         finally:
@@ -422,8 +495,17 @@ class TransmissionManager:
         except Exception as e:
             logger.error("Failed to update active devices", error=str(e))
 
+    @staticmethod
+    def _get_file_hash(file_path: str) -> str:
+        """Fast file hash based on mtime + size (no disk read). Phase 2 — 5.1."""
+        try:
+            stat = os.stat(file_path)
+            return f"{stat.st_mtime}:{stat.st_size}"
+        except OSError:
+            return ""
+
     async def _load_dataset_rows(self, session: AsyncSession, device_uuid) -> List[Dict[str, Any]]:
-        """Load all rows from datasets linked to a device"""
+        """Load all rows from datasets linked to a device (with cache). Phase 2 — 5.1."""
         from app.models import device_datasets, Dataset
 
         # Get linked dataset IDs
@@ -437,8 +519,23 @@ class TransmissionManager:
             return []
 
         all_rows: List[Dict[str, Any]] = []
+        now = time.time()
 
         for ds_id in dataset_ids:
+            ds_key = str(ds_id)
+            cached = self._dataset_cache.get(ds_key)
+
+            # Check if cache is still valid (Phase 2 — 5.1)
+            if cached and (now - cached.loaded_at < self._DATASET_CACHE_TTL):
+                # Quick revalidation: check file hash (mtime+size, no disk read)
+                current_hash = self._get_file_hash(cached.file_path)
+                if current_hash and current_hash == cached.file_hash:
+                    CACHE_HITS.labels(cache_type="dataset").inc()
+                    all_rows.extend(cached.rows)
+                    continue
+
+            # Cache miss or stale — load from DB + disk
+            CACHE_MISSES.labels(cache_type="dataset").inc()
             ds_stmt = select(Dataset).where(
                 Dataset.id == ds_id,
                 Dataset.is_deleted == False,
@@ -447,33 +544,48 @@ class TransmissionManager:
             ds_result = await session.execute(ds_stmt)
             dataset = ds_result.scalar_one_or_none()
             
-            # Debug logging
             if not dataset:
-                logger.warning("Dataset not found or not ready", dataset_id=str(ds_id))
+                logger.warning("Dataset not found or not ready", dataset_id=ds_key)
                 continue
             
             logger.debug("Dataset found", 
-                        dataset_id=str(ds_id), 
+                        dataset_id=ds_key, 
                         name=getattr(dataset, 'name', 'unknown'),
                         status=getattr(dataset, 'status', 'unknown'),
                         file_path=getattr(dataset, 'file_path', None),
                         file_format=getattr(dataset, 'file_format', None))
             
             if not dataset.file_path:
-                logger.warning("Dataset has no file_path", dataset_id=str(ds_id))
+                logger.warning("Dataset has no file_path", dataset_id=ds_key)
                 continue
+
+            # Resolve file path
+            file_path = dataset.file_path
+            if file_path and not file_path.startswith('/'):
+                file_path = f"/workspace/api-service/{file_path}"
 
             # Read CSV/JSON file
             try:
                 rows = self._read_dataset_file(dataset.file_path, dataset.file_format)
+                file_hash = self._get_file_hash(file_path)
+
+                # Store in cache (Phase 2 — 5.1)
+                self._dataset_cache[ds_key] = CachedDataset(
+                    rows=rows,
+                    file_hash=file_hash,
+                    loaded_at=now,
+                    file_path=file_path,
+                )
+
                 logger.info("Dataset loaded", 
-                           dataset_id=str(ds_id), 
+                           dataset_id=ds_key, 
                            rows_loaded=len(rows),
-                           file_path=dataset.file_path)
+                           file_path=dataset.file_path,
+                           cached=True)
                 all_rows.extend(rows)
             except Exception as e:
                 logger.error("Failed to read dataset file",
-                             dataset_id=str(ds_id), path=dataset.file_path, error=str(e))
+                             dataset_id=ds_key, path=dataset.file_path, error=str(e))
 
         return all_rows
 
@@ -566,6 +678,25 @@ class TransmissionManager:
             logger.error("Failed to get connection", connection_id=connection_id, error=str(e))
             return None
 
+    async def _get_connection_cached(self, session: AsyncSession, connection_id: str) -> Optional[Connection]:
+        """Fetch connection with TTL cache (Phase 1 — 5.2). Avoids DB round-trip per transmission."""
+        now = time.time()
+        cached = self._connection_cache.get(connection_id)
+        if cached:
+            conn, cached_at = cached
+            if now - cached_at < self._CONNECTION_CACHE_TTL:
+                CACHE_HITS.labels(cache_type="connection").inc()
+                return conn
+
+        CACHE_MISSES.labels(cache_type="connection").inc()
+        db_start = time.perf_counter()
+        conn = await self._get_connection(session, connection_id)
+        DB_QUERIES_TOTAL.labels(operation="get_connection").inc()
+        DB_QUERY_DURATION.labels(operation="get_connection").observe(time.perf_counter() - db_start)
+        if conn:
+            self._connection_cache[connection_id] = (conn, now)
+        return conn
+
     async def _publish_with_retry(
         self,
         handler,
@@ -646,8 +777,8 @@ class TransmissionManager:
 
         try:
             async with AsyncSessionLocal() as session:
-                # Load connection configuration
-                connection = await self._get_connection(session, state.connection_id)
+                # Load connection configuration (Phase 1 — 5.2: cached)
+                connection = await self._get_connection_cached(session, state.connection_id)
                 if not connection:
                     logger.error("Connection not found for device", 
                                device=state.device_ref, connection_id=state.connection_id)
@@ -667,17 +798,12 @@ class TransmissionManager:
                 # Parse connection config
                 config = connection.config or {}
 
-                # Decrypt sensitive fields (passwords, tokens, etc.)
-                # Note: endpoint_url, broker_url, topic are NOT encrypted
-                # Only auth fields (password, username, bearer_token) are encrypted
-                try:
-                    import sys
-                    if '/workspace/api-service' not in sys.path:
-                        sys.path.insert(0, '/workspace/api-service')
-                    from app.core.encryption import decrypt_connection_config as _decrypt
-                    config = _decrypt(config)
-                except Exception:
-                    pass  # Non-critical: URL fields are not encrypted
+                # Decrypt sensitive fields (Phase 1 — 5.7: static import)
+                if _HAS_ENCRYPTION:
+                    try:
+                        config = _decrypt_connection_config(config)
+                    except Exception:
+                        pass  # Non-critical: URL fields are not encrypted
 
                 # Determine topic/endpoint based on protocol
                 if protocol_str in ("http", "https"):
@@ -723,6 +849,10 @@ class TransmissionManager:
                         # Already sent the full batch in idx==0, skip remaining rows
                         continue
 
+                    # Phase 1 (5.4): Serialize JSON once, reuse for publish + payload_size
+                    payload_json = json.dumps(payload)
+                    payload_size = len(payload_json)
+
                     # ── Phase 5: Publish with exponential backoff retry ──
                     result = await self._publish_with_retry(
                         handler, pooled_conn, config, topic, payload, state,
@@ -749,7 +879,7 @@ class TransmissionManager:
                         connection_id=state.connection_id,
                         message_type="dataset_row",
                         direction="sent" if result.success else "failed",
-                        payload_size=len(json.dumps(payload)),
+                        payload_size=payload_size,
                         message_content=payload,
                         protocol=protocol_str,
                         status="success" if result.success else "failed",
@@ -759,6 +889,14 @@ class TransmissionManager:
                         log_metadata=log_meta,
                     )
                     logs.append(log)
+
+                    # Phase 4: Record Prometheus metrics per message
+                    status_label = "success" if result.success else "failed"
+                    MESSAGES_TOTAL.labels(protocol=protocol_str, status=status_label).inc()
+                    if result.latency_ms:
+                        TRANSMISSION_LATENCY.labels(protocol=protocol_str).observe(result.latency_ms / 1000.0)
+                    if result.success:
+                        BYTES_TRANSMITTED.labels(protocol=protocol_str).inc(payload_size)
 
                     if result.success:
                         success_count += 1
@@ -808,8 +946,10 @@ class TransmissionManager:
                             last_transmission_at=datetime.now(timezone.utc),
                         )
                     )
+                    DB_QUERIES_TOTAL.labels(operation="update_device_state").inc()
 
                     await session.commit()
+                    DB_QUERIES_TOTAL.labels(operation="commit_logs").inc()
 
                 # Update stats
                 state.current_row_index = end_index if success_count > 0 else state.current_row_index

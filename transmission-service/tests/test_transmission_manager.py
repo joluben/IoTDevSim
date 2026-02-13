@@ -41,6 +41,7 @@ def _make_state(
         device_id="aaaa-bbbb-cccc-dddd",
         device_ref="TESTDEV1",
         connection_id="conn-1111",
+        project_id="proj-1111",
         device_type=device_type,
         frequency=frequency,
         batch_size=batch_size,
@@ -116,7 +117,7 @@ class TestRowIndexAdvancement:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -144,7 +145,7 @@ class TestRowIndexAdvancement:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -172,7 +173,7 @@ class TestRowIndexAdvancement:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn), \
              patch.object(manager.connection_pool, "invalidate", new_callable=AsyncMock), \
@@ -212,7 +213,7 @@ class TestAutoReset:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -260,7 +261,7 @@ class TestConnectionPoolingReuse:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn) as mock_acquire:
 
@@ -294,7 +295,7 @@ class TestConnectionPoolingReuse:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -322,7 +323,7 @@ class TestConnectionPoolingReuse:
         handler.publish_pooled = AsyncMock(return_value=_success_result())
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", side_effect=ConnectionError("fail")):
 
@@ -386,7 +387,7 @@ class TestCircuitBreakerIntegration:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -418,7 +419,7 @@ class TestCircuitBreakerIntegration:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn), \
              patch.object(manager.connection_pool, "invalidate", new_callable=AsyncMock) as mock_invalidate, \
@@ -457,7 +458,7 @@ class TestStatsTracking:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn):
 
@@ -487,7 +488,7 @@ class TestStatsTracking:
         pooled_conn.client = MagicMock()
 
         with patch("app.services.transmission_manager.AsyncSessionLocal") as MockSession, \
-             patch.object(manager, "_get_connection", return_value=connection), \
+             patch.object(manager, "_get_connection_cached", return_value=connection), \
              patch("app.services.transmission_manager.protocol_registry") as mock_registry, \
              patch.object(manager.connection_pool, "acquire", return_value=pooled_conn), \
              patch.object(manager.connection_pool, "invalidate", new_callable=AsyncMock), \

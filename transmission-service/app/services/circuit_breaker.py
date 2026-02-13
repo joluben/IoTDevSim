@@ -57,13 +57,21 @@ class CircuitBreaker:
 
         # Per-connection state: connection_id → (state, stats, open_count)
         self._circuits: Dict[str, tuple] = {}
-        self._lock = asyncio.Lock()
+        # Phase 2 (5.5): Per-connection granular locks to reduce contention
+        self._locks: Dict[str, asyncio.Lock] = {}
+        self._global_lock = asyncio.Lock()  # Only for reset_all
+
+    def _get_lock(self, connection_id: str) -> asyncio.Lock:
+        """Get or create a per-connection lock. Phase 2 — 5.5."""
+        if connection_id not in self._locks:
+            self._locks[connection_id] = asyncio.Lock()
+        return self._locks[connection_id]
 
     # ── public API ──────────────────────────────────────────────
 
     async def can_execute(self, connection_id: str) -> bool:
         """Check whether a request to *connection_id* is allowed."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             state, stats, open_count = self._get_or_create(connection_id)
 
             if state == CircuitState.CLOSED:
@@ -88,7 +96,7 @@ class CircuitBreaker:
 
     async def record_success(self, connection_id: str) -> None:
         """Record a successful request — resets the circuit to CLOSED."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             state, stats, _ = self._get_or_create(connection_id)
             stats.consecutive_failures = 0
             stats.total_successes += 1
@@ -109,7 +117,7 @@ class CircuitBreaker:
         error_code: Optional[str] = None,
     ) -> None:
         """Record a failed request — may trip the circuit to OPEN."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             state, stats, open_count = self._get_or_create(connection_id)
             stats.consecutive_failures += 1
             stats.total_failures += 1
@@ -142,19 +150,19 @@ class CircuitBreaker:
 
     async def get_state(self, connection_id: str) -> CircuitState:
         """Return the current state for a connection."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             state, _, _ = self._get_or_create(connection_id)
             return state
 
     async def get_stats(self, connection_id: str) -> CircuitStats:
         """Return statistics for a connection."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             _, stats, _ = self._get_or_create(connection_id)
             return stats
 
     async def reset(self, connection_id: str) -> None:
         """Manually reset a circuit to CLOSED."""
-        async with self._lock:
+        async with self._get_lock(connection_id):
             if connection_id in self._circuits:
                 self._set_state(connection_id, CircuitState.CLOSED, reset_open_count=True)
                 _, stats, _ = self._circuits[connection_id]
@@ -163,8 +171,9 @@ class CircuitBreaker:
 
     async def reset_all(self) -> None:
         """Reset all circuits."""
-        async with self._lock:
+        async with self._global_lock:
             self._circuits.clear()
+            self._locks.clear()
 
     # ── internals ───────────────────────────────────────────────
 
