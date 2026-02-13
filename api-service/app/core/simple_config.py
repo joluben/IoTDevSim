@@ -1,0 +1,87 @@
+"""
+Simple Configuration for Development
+"""
+
+import os
+from typing import List
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class SimpleSettings:
+    """Simple settings without complex validation"""
+    
+    def __init__(self):
+        # Application
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+        self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+        
+        # Database
+        self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./iot_devsim.db")
+        self.DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+        self.DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+        self.DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+        self.DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+        
+        # Redis
+        self.REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        
+        # JWT Authentication
+        self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-change-in-production-min-32-chars-for-security")
+        self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+        self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+        self.JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+        
+        # Security
+        self.BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
+        self.ALLOWED_HOSTS = ["*"]
+        cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+        self.CORS_ORIGINS = [
+            origin.strip()
+            for origin in cors_origins.split(",")
+            if origin.strip()
+        ]
+        
+        # Rate Limiting
+        self.RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+        
+        # File Upload
+        self.MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(10 * 1024 * 1024)))
+        self.UPLOAD_PATH = os.getenv("UPLOAD_PATH", "uploads")
+        
+        # CSV Processing
+        self.CSV_MAX_ROWS = int(os.getenv("CSV_MAX_ROWS", "10000"))
+        self.CSV_CHUNK_SIZE = int(os.getenv("CSV_CHUNK_SIZE", "1000"))
+        
+        # Device Management
+        self.MAX_DEVICES_PER_PROJECT = int(os.getenv("MAX_DEVICES_PER_PROJECT", "1000"))
+        self.MAX_DEVICE_DUPLICATION = int(os.getenv("MAX_DEVICE_DUPLICATION", "50"))
+
+# Create settings instance
+settings = SimpleSettings()
+
+# Derived settings
+DATABASE_CONFIG = {
+    "pool_size": settings.DB_POOL_SIZE,
+    "max_overflow": settings.DB_MAX_OVERFLOW,
+    "pool_timeout": settings.DB_POOL_TIMEOUT,
+    "pool_recycle": settings.DB_POOL_RECYCLE,
+    "pool_pre_ping": True,
+    "echo": settings.ENVIRONMENT == "development" and settings.DEBUG,
+}
+
+REDIS_CONFIG = {
+    "url": settings.REDIS_URL,
+    "decode_responses": True,
+    "retry_on_timeout": True,
+    "socket_keepalive": True,
+    "socket_keepalive_options": {},
+}
+
+JWT_CONFIG = {
+    "secret_key": settings.JWT_SECRET_KEY,
+    "algorithm": settings.JWT_ALGORITHM,
+    "access_token_expire_minutes": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
+    "refresh_token_expire_days": settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS,
+}

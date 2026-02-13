@@ -1,0 +1,29 @@
+# Core FastAPI dependencies
+fastapi==0.128.7
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+
+# Database dependencies (shared with API service)
+sqlalchemy==2.0.46
+asyncpg==0.31.0
+
+# Validation and serialization
+pydantic==2.10.6
+pydantic-settings==2.8.1
+
+# HTTP client
+httpx==0.28.1
+
+# MQTT and Kafka clients for IoT communication
+paho-mqtt==2.1.0
+kafka-python-ng==2.2.3
+websocket-client==1.9.0
+
+# Encryption (shared with API service for config decryption)
+cryptography==46.0.0
+
+# Logging
+structlog==25.1.0
+
+# Development utilities
+python-dotenv==1.0.1

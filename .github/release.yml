@@ -1,0 +1,70 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot
+      - github-actions
+  categories:
+    - title: 🚀 Nuevas Funcionalidades
+      labels:
+        - feature
+        - enhancement
+        - feat
+    - title: 🐛 Correcciones
+      labels:
+        - bug
+        - fix
+        - hotfix
+    - title: 🔒 Seguridad
+      labels:
+        - security
+        - vulnerability
+    - title: ⚡ Rendimiento
+      labels:
+        - performance
+        - perf
+    - title: 📚 Documentación
+      labels:
+        - documentation
+        - docs
+    - title: 🔧 Mantenimiento
+      labels:
+        - chore
+        - refactor
+        - ci
+        - build
+    - title: ⬆️ Dependencias
+      labels:
+        - dependencies
+        - deps
+  template: |
+    ## Cambios en esta Release
+
+    $CHANGES
+
+    ## Contribuidores
+
+    Gracias a $CONTRIBUTORS por sus contribuciones!
+
+    ## Notas de Instalación
+
+    ### Docker (Recomendado)
+    ```bash
+    git checkout {{ .Tag }}
+    docker-compose pull
+    docker-compose up -d
+    ```
+
+    ### Desarrollo Local
+    ```bash
+    git checkout {{ .Tag }}
+    cd api-service && pip install -r requirements.txt
+    cd ../frontend && npm install && npm run build
+    ```
+
+    ## Links
+
+    - [CHANGELOG completo](../CHANGELOG.md)
+    - [Documentación](../docs/)
+    - [Issues relacionados](../../issues?q=is%3Aissue+milestone%3A{{ .Tag }})

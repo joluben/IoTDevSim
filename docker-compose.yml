@@ -1,0 +1,191 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: iot-devsim-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iot_devsim}
+      POSTGRES_USER: ${POSTGRES_USER:-iot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot_user} -d ${POSTGRES_DB:-iot_devsim}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # API Service
+  api-service:
+    build:
+      context: ./api-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: iot-devsim-api
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-iot_user}:${POSTGRES_PASSWORD:-iot_password}@postgres:5432/${POSTGRES_DB:-iot_devsim}
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      - PYTHONPATH=/app
+    volumes:
+      - ./api-service:/app
+      - ./:/workspace:rw
+      - api_logs:/app/logs
+      - ./api-service/uploads/datasets:/app/uploads/datasets
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks:
+      - iot-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level info
+
+  # Transmission Service
+  transmission-service:
+    build:
+      context: ./transmission-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: iot-devsim-transmission
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-iot_user}:${POSTGRES_PASSWORD:-iot_password}@postgres:5432/${POSTGRES_DB:-iot_devsim}
+      - REDIS_URL=redis://redis:6379/1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production}
+      - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-localhost}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
+      - TRANSMISSION_BATCH_SIZE=${TRANSMISSION_BATCH_SIZE:-100}
+      - TRANSMISSION_INTERVAL_MS=${TRANSMISSION_INTERVAL_MS:-1000}
+      - PYTHONPATH=/workspace/api-service:/app
+    volumes:
+      - ./transmission-service:/app
+      - ./:/workspace:rw
+      - transmission_logs:/app/logs
+      - ./api-service/uploads/datasets:/workspace/api-service/uploads/datasets
+    ports:
+      - "${TRANSMISSION_PORT:-8001}:8001"
+    networks:
+      - iot-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --log-level info
+
+  # Redis for caching and session management
+  redis:
+    image: redis:8-alpine
+    container_name: iot-devsim-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # MinIO for S3-compatible object storage (optional, set STORAGE_BACKEND=s3)
+  minio:
+    image: minio/minio:latest
+    container_name: iot-devsim-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: server /data --console-address ":9001"
+    profiles:
+      - storage
+
+  # Celery Worker for background tasks (optional, for async dataset generation)
+  celery-worker:
+    build:
+      context: ./api-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: iot-devsim-celery-worker
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-iot_user}:${POSTGRES_PASSWORD:-iot_password}@postgres:5432/${POSTGRES_DB:-iot_devsim}
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production}
+      - PYTHONPATH=/app
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - ./api-service:/app
+    networks:
+      - iot-network
+    depends_on:
+      - redis
+      - postgres
+    command: celery -A app.core.celery_app:celery_app worker --loglevel=info --concurrency=2
+    profiles:
+      - worker
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  api_logs:
+    driver: local
+  transmission_logs:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  iot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,41 @@
+version: '3.8'
+
+# Kafka + Zookeeper for local development.
+# Start with:  docker compose -f docker-compose-kafka.yml up -d
+#
+# The broker advertises TWO listeners so it is reachable from:
+#   • The host machine        → localhost:9092
+#   • Other Docker containers → host.docker.internal:29092
+#
+# In the IoT-DevSim "Kafka Test" connection, set bootstrap_servers
+# to  host.docker.internal:29092  (from inside Docker containers)
+# or  localhost:9092              (from the host / browser tests).
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Two listeners: one for host access, one for Docker-internal access
+      KAFKA_LISTENERS: HOST://0.0.0.0:9092,DOCKER://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://host.docker.internal:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: HOST
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
