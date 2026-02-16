@@ -28,7 +28,29 @@ vi.mock('@/hooks/useConnections', () => {
       mutate: vi.fn(),
       isPending: false,
     }),
+    useBulkOperations: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useImportConnections: () => ({
+      mutateAsync: vi.fn(),
+      isPending: false,
+      error: null,
+      reset: vi.fn(),
+    }),
+    useExportConnections: () => ({
+      mutateAsync: vi.fn(),
+      isPending: false,
+      error: null,
+      reset: vi.fn(),
+    }),
     useCreateConnection: () => ({
+      mutateAsync: vi.fn(),
+      isPending: false,
+      error: null,
+      reset: vi.fn(),
+    }),
+    useUpdateConnection: () => ({
       mutateAsync: vi.fn(),
       isPending: false,
       error: null,
@@ -57,6 +79,6 @@ describe('ConnectionsPage', () => {
     expect(screen.getByText('No hay conexiones')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: /crear/i })[0]);
-    expect(screen.getByText('Nueva conexión')).toBeInTheDocument();
+    expect(screen.getAllByText('Nueva conexión').length).toBeGreaterThan(0);
   });
 });

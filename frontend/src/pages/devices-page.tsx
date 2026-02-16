@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { LayoutGrid, Table as TableIcon, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { DevicesTable } from '@/components/devices/devices-table';
@@ -42,6 +43,8 @@ export default function DevicesPage() {
   const deleteMutation = useDeleteDevice();
   const patchMutation = usePatchDevice();
 
+  const [deletingDeviceId, setDeletingDeviceId] = React.useState<string | null>(null);
+
   const devices = listQuery.data?.items ?? [];
 
   React.useEffect(() => {
@@ -58,11 +61,26 @@ export default function DevicesPage() {
   }, [listQuery.isError]);
 
   const handleDelete = (id: string) => {
+    setDeletingDeviceId(id);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingDeviceId) return;
     deleteMutation.mutate(
-      { id },
+      { id: deletingDeviceId },
       {
-        onSuccess: () =>
-          addNotification({ type: 'success', title: 'Device deleted', message: '' }),
+        onSuccess: () => {
+          addNotification({ type: 'success', title: 'Device deleted', message: '' });
+          setDeletingDeviceId(null);
+        },
+        onError: (error) => {
+          addNotification({
+            type: 'error',
+            title: 'Failed to delete device',
+            message: error instanceof Error ? error.message : 'Unexpected error',
+          });
+          setDeletingDeviceId(null);
+        },
       }
     );
   };
@@ -246,6 +264,18 @@ export default function DevicesPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deletingDeviceId}
+        onOpenChange={(open) => { if (!open) setDeletingDeviceId(null); }}
+        title="Delete device"
+        description="Are you sure you want to delete this device? Active transmissions will be stopped and the device configuration will be lost."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+      />
     </PageContainer>
   );
 }

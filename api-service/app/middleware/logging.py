@@ -16,6 +16,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     """Log all requests and responses with timing and metadata"""
     
     async def dispatch(self, request: Request, call_next):
+        # Skip logging for preflight CORS requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Generate request ID
         request_id = str(uuid.uuid4())
         

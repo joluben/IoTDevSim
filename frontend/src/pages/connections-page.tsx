@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Plus, LayoutGrid, Table as TableIcon } from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import {
   useBulkOperations,
 } from '@/hooks/useConnections';
 import type { ConnectionFilters, Connection } from '@/types/connection';
+
 import { useUIStore } from '@/app/store/ui-store';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -50,6 +52,8 @@ export default function ConnectionsPage() {
   const deleteMutation = useDeleteConnection();
   const bulkMutation = useBulkOperations();
 
+  const [deletingConnectionId, setDeletingConnectionId] = React.useState<string | null>(null);
+
   const connections = listQuery.data?.items ?? [];
 
   React.useEffect(() => {
@@ -71,7 +75,28 @@ export default function ConnectionsPage() {
   };
 
   const handleDelete = (id: string) => {
-    deleteMutation.mutate({ id });
+    setDeletingConnectionId(id);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingConnectionId) return;
+    deleteMutation.mutate(
+      { id: deletingConnectionId },
+      {
+        onSuccess: () => {
+          addNotification({ type: 'success', title: 'Connection deleted', message: '' });
+          setDeletingConnectionId(null);
+        },
+        onError: (error) => {
+          addNotification({
+            type: 'error',
+            title: 'Failed to delete connection',
+            message: error instanceof Error ? error.message : 'Unexpected error',
+          });
+          setDeletingConnectionId(null);
+        },
+      },
+    );
   };
 
   const handleBulkDelete = (ids: string[]) => {
@@ -192,6 +217,18 @@ export default function ConnectionsPage() {
         onOpenChange={(open) => {
           if (!open) setEditingConnection(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={!!deletingConnectionId}
+        onOpenChange={(open) => { if (!open) setDeletingConnectionId(null); }}
+        title="Delete connection"
+        description="Are you sure you want to delete this connection? This action cannot be undone and any devices using this connection will stop transmitting."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
       />
     </PageContainer>
   );

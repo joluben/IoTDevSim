@@ -49,7 +49,6 @@ export const ROUTES = {
   // Public routes
   home: '/',
   login: '/login',
-  register: '/register',
   forgotPassword: '/forgot-password',
 
   // Protected routes
@@ -60,6 +59,7 @@ export const ROUTES = {
   projects: '/projects',
   analytics: '/analytics',
   settings: '/settings',
+  usersManagement: '/settings/users',
   profile: '/profile',
 
   // Nested routes
@@ -161,6 +161,8 @@ export const FEATURES = {
   enableWebSocket: import.meta.env.VITE_ENABLE_WEBSOCKET !== 'false',
   enableDevTools: import.meta.env.DEV,
   enableBetaFeatures: import.meta.env.VITE_ENABLE_BETA === 'true',
+  enableFederatedAuth: import.meta.env.VITE_ENABLE_FEDERATED_AUTH === 'true',
+  federatedAuthProvider: import.meta.env.VITE_FEDERATED_AUTH_PROVIDER || 'Keycloak',
 } as const;
 
 // Error Messages

@@ -4,19 +4,12 @@
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { API_CONFIG, AUTH_CONFIG } from '@/app/config/constants';
+import { API_CONFIG, AUTH_CONFIG, FEATURES } from '@/app/config/constants';
 
 // Types for authentication API responses
 export interface LoginRequest {
   email: string;
   password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  full_name: string;
-  confirm_password: string;
 }
 
 export interface AuthResponse {
@@ -25,7 +18,7 @@ export interface AuthResponse {
     email: string;
     name: string;
     avatar?: string;
-    role: 'admin' | 'user' | 'viewer';
+    roles: string[];
     permissions: string[];
     createdAt: string;
     lastLoginAt?: string;
@@ -44,6 +37,58 @@ export interface RefreshTokenResponse {
   refreshToken: string;
   expiresIn: number;
 }
+
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  is_verified: boolean;
+  is_superuser: boolean;
+  avatar_url?: string | null;
+  bio?: string | null;
+  roles: string[];
+  permissions: string[];
+  created_at: string;
+  last_login?: string | null;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+interface LogoutStrategy {
+  logout(api: AxiosInstance): Promise<void>;
+}
+
+class LocalLogoutStrategy implements LogoutStrategy {
+  async logout(api: AxiosInstance): Promise<void> {
+    const refreshToken = TokenStorage.getRefreshToken();
+    if (!refreshToken) {
+      return;
+    }
+
+    await api.post('/logout', { refreshToken });
+  }
+}
+
+class FederatedLogoutStrategy implements LogoutStrategy {
+  constructor(private readonly fallbackStrategy: LogoutStrategy) {}
+
+  async logout(api: AxiosInstance): Promise<void> {
+    // Phase 2 placeholder: local logout remains active until federated flow is enabled.
+    await this.fallbackStrategy.logout(api);
+  }
+}
+
+const buildLogoutStrategy = (): LogoutStrategy => {
+  const localStrategy = new LocalLogoutStrategy();
+  return FEATURES.enableFederatedAuth
+    ? new FederatedLogoutStrategy(localStrategy)
+    : localStrategy;
+};
 
 // Token storage utilities with encryption consideration
 class TokenStorage {
@@ -89,6 +134,7 @@ class TokenStorage {
 class AuthService {
   private api: AxiosInstance;
   private isRefreshing = false;
+  private logoutStrategy: LogoutStrategy;
   private failedQueue: Array<{
     resolve: (value: string) => void;
     reject: (error: any) => void;
@@ -105,6 +151,7 @@ class AuthService {
     });
 
     this.setupInterceptors();
+    this.logoutStrategy = buildLogoutStrategy();
   }
 
   private setupInterceptors(): void {
@@ -194,7 +241,7 @@ class AuthService {
         email: user.email || '',
         name: user.full_name || user.name || '',
         avatar: user.avatar_url || user.avatar,
-        role: (user.roles?.[0] as AuthResponse['user']['role']) || 'user',
+        roles: user.roles || ['user'],
         permissions: user.permissions || [],
         createdAt: user.created_at || user.createdAt || '',
         lastLoginAt: user.last_login || user.lastLoginAt,
@@ -207,21 +254,6 @@ class AuthService {
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
       const response = await this.api.post('/login', credentials);
-      const data = this.mapAuthResponse(response.data);
-      
-      // Store tokens securely
-      TokenStorage.setToken(data.token);
-      TokenStorage.setRefreshToken(data.refreshToken);
-      
-      return data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  async register(userData: RegisterRequest): Promise<AuthResponse> {
-    try {
-      const response = await this.api.post('/register', userData);
       const data = this.mapAuthResponse(response.data);
       
       // Store tokens securely
@@ -266,11 +298,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      const refreshToken = TokenStorage.getRefreshToken();
-      if (refreshToken) {
-        // Notify server about logout (optional)
-        await this.api.post('/logout', { refreshToken });
-      }
+      await this.logoutStrategy.logout(this.api);
     } catch (error) {
       // Ignore logout errors, clear tokens anyway
       console.warn('Logout request failed:', error);
@@ -301,6 +329,23 @@ class AuthService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async getCurrentProfile(): Promise<UserProfileResponse> {
+    try {
+      const response = await this.api.get<UserProfileResponse>('/me');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    try {
+      await this.api.post('/change-password', payload);
+    } catch (error) {
+      throw this.handleError(error);
     }
   }
 
