@@ -106,6 +106,15 @@ export const secondaryNavigationItems: NavigationItem[] = [
     description: 'Application settings',
     requiredRole: 'admin',
   },
+  {
+    id: 'users-management',
+    label: 'User Management',
+    href: ROUTES.usersManagement,
+    icon: User,
+    description: 'Manage users, groups and permissions',
+    requiredRole: 'admin',
+    requiredPermission: 'users:read',
+  },
 ];
 
 // Grouped navigation structure
@@ -114,40 +123,6 @@ export const navigationGroups: NavigationGroup[] = [
     id: 'main',
     label: 'Main',
     items: navigationItems,
-  },
-  {
-    id: 'management',
-    label: 'Management',
-    items: [
-      {
-        id: 'monitoring',
-        label: 'Monitoring',
-        href: '/monitoring',
-        icon: Activity,
-        description: 'Real-time monitoring',
-        children: [
-          {
-            id: 'system-status',
-            label: 'System Status',
-            href: '/monitoring/system',
-            icon: Database,
-            description: 'System health monitoring',
-          },
-          {
-            id: 'performance',
-            label: 'Performance',
-            href: '/monitoring/performance',
-            icon: Zap,
-            description: 'Performance metrics',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'account',
-    label: 'Account',
-    items: secondaryNavigationItems,
   },
 ];
 
@@ -238,10 +213,10 @@ export const getActiveNavigationItem = (pathname: string): NavigationItem | unde
 export const hasNavigationPermission = (
   item: NavigationItem,
   userPermissions: string[] = [],
-  userRole: string = 'viewer'
+  userRoles: string[] = ['viewer']
 ): boolean => {
   // Check role requirement
-  if (item.requiredRole && item.requiredRole !== userRole) {
+  if (item.requiredRole && !userRoles.includes(item.requiredRole)) {
     return false;
   }
 
@@ -257,13 +232,13 @@ export const hasNavigationPermission = (
 export const filterNavigationItems = (
   items: NavigationItem[],
   userPermissions: string[] = [],
-  userRole: string = 'viewer'
+  userRoles: string[] = ['viewer']
 ): NavigationItem[] => {
-  return items.filter(item => hasNavigationPermission(item, userPermissions, userRole))
+  return items.filter(item => hasNavigationPermission(item, userPermissions, userRoles))
     .map(item => ({
       ...item,
       children: item.children
-        ? filterNavigationItems(item.children, userPermissions, userRole)
+        ? filterNavigationItems(item.children, userPermissions, userRoles)
         : undefined,
     }));
 };

@@ -23,7 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useAuthStore } from '@/app/store/auth-store';
-import { ROUTES, VALIDATION } from '@/app/config/constants';
+import { FEATURES, ROUTES, VALIDATION } from '@/app/config/constants';
 
 // Zod schema for login form validation
 const loginSchema = z.object({
@@ -200,16 +200,12 @@ export function LoginForm({ onSuccess, redirectTo, className }: LoginFormProps) 
               )}
             </Button>
 
-            {/* Register Link */}
-            <div className="text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
-              <Link
-                to={ROUTES.register}
-                className="text-primary hover:underline font-medium"
-              >
-                Sign up
-              </Link>
-            </div>
+            {FEATURES.enableFederatedAuth ? (
+              <Button type="button" variant="outline" className="w-full" disabled>
+                Acceder con {FEATURES.federatedAuthProvider}
+              </Button>
+            ) : null}
+
           </form>
         </Form>
       </CardContent>

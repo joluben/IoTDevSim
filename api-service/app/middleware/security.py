@@ -23,6 +23,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     
     async def dispatch(self, request: Request, call_next):
+        # Skip security headers for preflight CORS requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         response = await call_next(request)
         
         # Security headers
@@ -108,7 +112,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.last_cleanup = current_time
     
     async def dispatch(self, request: Request, call_next):
-        # Skip rate limiting for health checks
+        # Skip rate limiting for preflight CORS requests and health checks
+        if request.method == "OPTIONS":
+            return await call_next(request)
         if request.url.path in ["/health", "/", "/docs", "/redoc", "/openapi.json"]:
             return await call_next(request)
         

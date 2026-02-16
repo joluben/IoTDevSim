@@ -32,6 +32,32 @@ class SimpleSettings:
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
         self.JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+        # Phase 2-ready auth issuer strategy (local remains the only active issuer in Phase 1)
+        self.AUTH_ACTIVE_ISSUER = os.getenv("AUTH_ACTIVE_ISSUER", "local")
+        trusted_issuers = os.getenv("AUTH_TRUSTED_ISSUERS", "iotdevsim-local")
+        self.AUTH_TRUSTED_ISSUERS = [issuer.strip() for issuer in trusted_issuers.split(",") if issuer.strip()]
+        self.AUTH_LOCAL_ISSUER = os.getenv("AUTH_LOCAL_ISSUER", "iotdevsim-local")
+        self.KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", "")
+
+        # Frontend base URL (used in password reset links)
+        self.FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+
+        # Bootstrap admin credentials
+        self.BOOTSTRAP_ADMIN_EMAIL = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@iotdevsim.com")
+        self.BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "IotDevSim")
+        self.BOOTSTRAP_ADMIN_FULL_NAME = os.getenv("BOOTSTRAP_ADMIN_FULL_NAME", "IoTDevSim Administrator")
+
+        # SMTP configuration
+        self.SMTP_HOST = os.getenv("SMTP_HOST", "")
+        self.SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+        self.SMTP_USER = os.getenv("SMTP_USER", "")
+        self.SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+        self.SMTP_FROM = os.getenv("SMTP_FROM", "")
+        self.SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+        self.SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+        self.SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS", "15"))
+        self.SMTP_MAX_RETRIES = int(os.getenv("SMTP_MAX_RETRIES", "2"))
         
         # Security
         self.BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))

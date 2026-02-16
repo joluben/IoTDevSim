@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from app.core.deps import get_db
+from app.core.deps import check_permissions, get_db
 from app.services.device import device_service
 from app.repositories.device import device_repository
 from app.schemas.device import (
@@ -57,6 +57,7 @@ async def _enrich_device_response(db: AsyncSession, device) -> dict:
 @router.post("/export")
 async def export_devices(
     export_request: DeviceExportRequest,
+    current_user = Depends(check_permissions(["devices:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Export devices to JSON."""
@@ -73,6 +74,7 @@ async def export_devices(
 @router.post("/import", response_model=DeviceImportResponse)
 async def import_devices(
     import_request: DeviceImportRequest,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Import devices from JSON."""
@@ -89,6 +91,7 @@ async def import_devices(
 @router.post("/bulk-link-dataset")
 async def bulk_link_dataset(
     request: DeviceDatasetBulkLinkRequest,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Link a dataset to multiple devices at once."""
@@ -108,6 +111,7 @@ async def bulk_link_dataset(
 @router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
 async def create_device(
     device_in: DeviceCreate,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -147,6 +151,7 @@ async def list_devices(
     limit: int = Query(20, ge=1, le=100, description="Max items to return"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order (asc/desc)"),
+    current_user = Depends(check_permissions(["devices:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """List devices with filtering, pagination, and search."""
@@ -194,6 +199,7 @@ async def list_devices(
 @router.get("/{device_uuid}", response_model=DeviceResponse)
 async def get_device(
     device_uuid: UUID,
+    current_user = Depends(check_permissions(["devices:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Get device by UUID."""
@@ -215,6 +221,7 @@ async def get_device(
 async def update_device(
     device_uuid: UUID,
     device_in: DeviceUpdate,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Update a device."""
@@ -236,6 +243,7 @@ async def update_device(
 async def patch_device(
     device_uuid: UUID,
     device_in: DeviceUpdate,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Partial update of a device."""
@@ -257,6 +265,7 @@ async def patch_device(
 async def delete_device(
     device_uuid: UUID,
     hard_delete: bool = Query(False, description="Permanent deletion"),
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Delete a device (soft delete by default)."""
@@ -279,6 +288,7 @@ async def delete_device(
 async def preview_duplication(
     device_uuid: UUID,
     request: DeviceDuplicateRequest,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Preview device duplication names before confirming."""
@@ -295,6 +305,7 @@ async def preview_duplication(
 async def duplicate_device(
     device_uuid: UUID,
     request: DeviceDuplicateRequest,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Create 1-50 copies of a device with unique references and incremental names."""
@@ -320,6 +331,7 @@ async def duplicate_device(
 @router.get("/{device_uuid}/datasets")
 async def get_device_datasets(
     device_uuid: UUID,
+    current_user = Depends(check_permissions(["devices:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Get all datasets linked to a device."""
@@ -337,6 +349,7 @@ async def get_device_datasets(
 async def link_dataset_to_device(
     device_uuid: UUID,
     request: DeviceDatasetLinkRequest,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -359,6 +372,7 @@ async def link_dataset_to_device(
 async def unlink_dataset_from_device(
     device_uuid: UUID,
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Unlink a dataset from a device."""
@@ -377,6 +391,7 @@ async def unlink_dataset_from_device(
 @router.get("/{device_uuid}/metadata", response_model=DeviceMetadataResponse)
 async def get_device_metadata(
     device_uuid: UUID,
+    current_user = Depends(check_permissions(["devices:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Get metadata for a specific device."""
@@ -393,6 +408,7 @@ async def get_device_metadata(
 async def update_device_metadata(
     device_uuid: UUID,
     metadata: DeviceMetadata,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Full update of device metadata."""
@@ -409,6 +425,7 @@ async def update_device_metadata(
 async def patch_device_metadata(
     device_uuid: UUID,
     metadata: DeviceMetadataUpdate,
+    current_user = Depends(check_permissions(["devices:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Partial update of device metadata fields."""

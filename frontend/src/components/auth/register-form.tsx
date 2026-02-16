@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Loader2, AlertCircle, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -79,7 +79,7 @@ interface RegisterFormProps {
 }
 
 export function RegisterForm({ onSuccess, redirectTo, className }: RegisterFormProps) {
-  const { register, isLoading, error, clearError } = useAuthStore();
+  const { isLoading, error, clearError } = useAuthStore();
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
@@ -101,23 +101,10 @@ export function RegisterForm({ onSuccess, redirectTo, className }: RegisterFormP
 
   // Handle form submission
   const onSubmit = async (values: RegisterFormValues) => {
-    try {
-      clearError(); // Clear any previous errors
-      await register(values.email, values.password, values.fullName, values.confirmPassword);
-      
-      // Call success callback if provided
-      if (onSuccess) {
-        onSuccess();
-      }
-      
-      // Redirect if specified
-      if (redirectTo) {
-        window.location.href = redirectTo;
-      }
-    } catch (error) {
-      // Error is handled by the auth store
-      console.error('Registration failed:', error);
-    }
+    void values;
+    void onSuccess;
+    void redirectTo;
+    clearError();
   };
 
   // Toggle password visibility
@@ -152,9 +139,9 @@ export function RegisterForm({ onSuccess, redirectTo, className }: RegisterFormP
             return (
               <div key={index} className="flex items-center space-x-2 text-sm">
                 {isValid ? (
-                  <Check className="h-3 w-3 text-green-500" />
+                  <CheckCircle2 className="h-3 w-3 text-green-500" />
                 ) : (
-                  <X className="h-3 w-3 text-muted-foreground" />
+                  <XCircle className="h-3 w-3 text-muted-foreground" />
                 )}
                 <span className={isValid ? 'text-green-600' : 'text-muted-foreground'}>
                   {req.text}
@@ -178,6 +165,12 @@ export function RegisterForm({ onSuccess, redirectTo, className }: RegisterFormP
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                Public registration is disabled. Please contact an administrator to create your account.
+              </AlertDescription>
+            </Alert>
+
             {/* Error Alert */}
             {error && (
               <Alert variant="destructive">
@@ -353,16 +346,9 @@ export function RegisterForm({ onSuccess, redirectTo, className }: RegisterFormP
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                'Create account'
-              )}
+              {isLoading ? 'Disabled' : 'Registration disabled'}
             </Button>
 
             {/* Login Link */}

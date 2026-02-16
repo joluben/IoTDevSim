@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT access token expiration")
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="JWT refresh token expiration")
+    AUTH_ACTIVE_ISSUER: str = Field(default="local", description="Active auth issuer strategy")
+    AUTH_TRUSTED_ISSUERS: List[str] = Field(default=["iotdevsim-local"], description="Trusted token issuers")
+    AUTH_LOCAL_ISSUER: str = Field(default="iotdevsim-local", description="Issuer used for locally generated JWTs")
+    KEYCLOAK_ISSUER: Optional[str] = Field(default=None, description="Future external Keycloak issuer")
     
     # Security
     BCRYPT_ROUNDS: int = Field(default=12, description="Bcrypt hashing rounds")
@@ -77,6 +81,13 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [host.strip() for host in v.split(",") if host.strip()]
         return v
+
+    @field_validator("AUTH_TRUSTED_ISSUERS", mode="before")
+    @classmethod
+    def parse_trusted_issuers(cls, v):
+        if isinstance(v, str):
+            return [issuer.strip() for issuer in v.split(",") if issuer.strip()]
+        return v if isinstance(v, list) else ["iotdevsim-local"]
     
     @field_validator("ENVIRONMENT")
     @classmethod

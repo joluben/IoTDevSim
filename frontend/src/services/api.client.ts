@@ -166,7 +166,10 @@ class ApiClient {
   private handleError(error: any): ApiError {
     if (axios.isAxiosError(error)) {
       const apiError: ApiError = {
-        message: error.response?.data?.message || error.message,
+        message:
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message,
         status: error.response?.status || 0,
         code: error.response?.data?.code,
         details: error.response?.data?.details,

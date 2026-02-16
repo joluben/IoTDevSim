@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { LayoutGrid, Table as TableIcon, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { ProjectsTable } from '@/components/projects/projects-table';
@@ -47,6 +48,8 @@ export default function ProjectsPage() {
   const archiveMutation = useArchiveProject();
   const unarchiveMutation = useUnarchiveProject();
 
+  const [deletingProjectId, setDeletingProjectId] = React.useState<string | null>(null);
+
   const projects = listQuery.data?.items ?? [];
 
   React.useEffect(() => {
@@ -63,9 +66,24 @@ export default function ProjectsPage() {
   }, [listQuery.isError]);
 
   const handleDelete = (id: string) => {
-    deleteMutation.mutate(id, {
-      onSuccess: () =>
-        addNotification({ type: 'success', title: 'Project deleted', message: '' }),
+    setDeletingProjectId(id);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingProjectId) return;
+    deleteMutation.mutate(deletingProjectId, {
+      onSuccess: () => {
+        addNotification({ type: 'success', title: 'Project deleted', message: '' });
+        setDeletingProjectId(null);
+      },
+      onError: (error) => {
+        addNotification({
+          type: 'error',
+          title: 'Failed to delete project',
+          message: error instanceof Error ? error.message : 'Unexpected error',
+        });
+        setDeletingProjectId(null);
+      },
     });
   };
 
@@ -273,6 +291,18 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deletingProjectId}
+        onOpenChange={(open) => { if (!open) setDeletingProjectId(null); }}
+        title="Delete project"
+        description="Are you sure you want to delete this project? All associated device assignments and transmission history will be permanently lost."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+      />
     </PageContainer>
   );
 }

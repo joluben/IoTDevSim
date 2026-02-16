@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { AUTH_CONFIG } from '@/app/config/constants';
-import { authService, TokenStorage, type AuthResponse, type LoginRequest, type RegisterRequest } from '@/services/auth.service';
+import { authService, TokenStorage, type AuthResponse, type LoginRequest } from '@/services/auth.service';
 import { apiClient } from '@/services/api.client';
 
 // User interface
@@ -11,7 +11,7 @@ export interface User {
   email: string;
   name: string;
   avatar?: string;
-  role: 'admin' | 'user' | 'viewer';
+  roles: string[];
   permissions: string[];
   createdAt: string;
   lastLoginAt?: string;
@@ -46,7 +46,6 @@ export interface AuthActions {
   // Authentication
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (email: string, password: string, fullName: string, confirmPassword: string) => Promise<void>;
   
   // Token management
   setTokens: (token: string, refreshToken: string, expiresIn: number) => void;
@@ -71,7 +70,7 @@ export interface AuthActions {
   
   // Utilities
   hasPermission: (permission: string) => boolean;
-  hasRole: (role: User['role']) => boolean;
+  hasRole: (role: string) => boolean;
   
   // Reset store
   reset: () => void;
@@ -168,53 +167,6 @@ export const useAuthStore = create<AuthStore>()(
             state.sessionTimeoutId = null;
             state.error = null;
           });
-        },
-
-        register: async (email, password, fullName, confirmPassword) => {
-          set((state) => {
-            state.isLoading = true;
-            state.error = null;
-          });
-
-          try {
-            const userData: RegisterRequest = {
-              email,
-              password,
-              full_name: fullName,
-              confirm_password: confirmPassword,
-            };
-            const data: AuthResponse = await authService.register(userData);
-            
-            // Store tokens via TokenStorage for apiClient access
-            TokenStorage.setToken(data.token);
-            TokenStorage.setRefreshToken(data.refreshToken);
-            
-            set((state) => {
-              state.isAuthenticated = true;
-              state.isLoading = false;
-              state.user = data.user;
-              state.token = data.token;
-              state.refreshToken = data.refreshToken;
-              state.tokenExpiration = Date.now() + data.expiresIn * 1000;
-              state.lastActivity = Date.now();
-              state.isSessionActive = true;
-              state.error = null;
-            });
-
-            // Start session timeout monitoring
-            get().startSessionTimeout();
-            
-            // Set up API client unauthorized callback
-            apiClient.setUnauthorizedCallback(() => {
-              get().logout();
-            });
-          } catch (error) {
-            set((state) => {
-              state.isLoading = false;
-              state.error = error instanceof Error ? error.message : 'Registration failed';
-            });
-            throw error;
-          }
         },
 
         // Token management
@@ -376,7 +328,7 @@ export const useAuthStore = create<AuthStore>()(
 
         hasRole: (role) => {
           const { user } = get();
-          return user?.role === role || false;
+          return user?.roles.includes(role) || false;
         },
 
         // Reset store

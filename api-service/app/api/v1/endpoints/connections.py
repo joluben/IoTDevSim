@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from app.core.deps import get_db
+from app.core.deps import check_permissions, get_db
 from app.services.connection import connection_service
 from app.schemas.connection import (
     ConnectionCreate,
@@ -60,6 +60,7 @@ async def get_connection_templates() -> Any:
 @router.post("/export", response_model=Any)
 async def export_connections(
     export_request: ConnectionExportRequest,
+    current_user = Depends(check_permissions(["connections:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -85,6 +86,7 @@ async def export_connections(
 @router.post("/import", response_model=BulkOperationResponse)
 async def import_connections(
     import_request: ConnectionImportRequest,
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -117,6 +119,7 @@ async def import_connections(
 @router.post("/bulk", response_model=BulkOperationResponse)
 async def perform_bulk_operation(
     bulk_request: BulkOperationRequest,
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -150,6 +153,7 @@ async def perform_bulk_operation(
 @router.post("/", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
 async def create_connection(
     connection_in: ConnectionCreate,
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -193,6 +197,7 @@ async def list_connections(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of items to return"),
     sort_by: str = Query("created_at", description="Field to sort by"),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
+    current_user = Depends(check_permissions(["connections:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -240,6 +245,7 @@ async def list_connections(
 @router.get("/{connection_id}", response_model=ConnectionResponse)
 async def get_connection(
     connection_id: UUID,
+    current_user = Depends(check_permissions(["connections:read"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -269,6 +275,7 @@ async def get_connection(
 async def update_connection(
     connection_id: UUID,
     connection_in: ConnectionUpdate,
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -300,6 +307,7 @@ async def update_connection(
 async def patch_connection(
     connection_id: UUID,
     connection_in: ConnectionUpdate,
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -330,6 +338,7 @@ async def patch_connection(
 async def delete_connection(
     connection_id: UUID,
     hard_delete: bool = Query(False, description="Perform hard delete instead of soft delete"),
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -365,6 +374,7 @@ async def delete_connection(
 async def test_connection(
     connection_id: UUID,
     test_request: ConnectionTestRequest = ConnectionTestRequest(),
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -410,6 +420,7 @@ async def test_multiple_connections(
     connection_ids: List[UUID],
     timeout: int = Query(10, ge=1, le=60, description="Test timeout in seconds"),
     max_concurrent: int = Query(5, ge=1, le=20, description="Maximum concurrent tests"),
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -507,6 +518,7 @@ async def get_health_monitoring_status() -> Any:
 async def start_health_monitoring(
     check_interval: int = Query(300, ge=60, le=3600, description="Check interval in seconds"),
     max_concurrent: int = Query(10, ge=1, le=50, description="Maximum concurrent health checks"),
+    current_user = Depends(check_permissions(["connections:write"])),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -552,7 +564,9 @@ async def start_health_monitoring(
 
 
 @router.post("/health/stop-monitoring")
-async def stop_health_monitoring() -> Any:
+async def stop_health_monitoring(
+    current_user = Depends(check_permissions(["connections:write"])),
+) -> Any:
     """
     Stop connection health monitoring.
     
