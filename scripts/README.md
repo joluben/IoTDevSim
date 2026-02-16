@@ -73,6 +73,71 @@ Actualiza la versión en todos los archivos del proyecto.
 
 ---
 
+## 🪟 Scripts PowerShell (Windows)
+
+Para usuarios de Windows, también están disponibles versiones PowerShell equivalentes:
+
+### 4. `bump-version.ps1` - Incrementar Versión (SemVer)
+
+Automáticamente incrementa la versión según el tipo (major, minor, patch) y actualiza todos los archivos.
+
+```powershell
+.\scripts\bump-version.ps1 -Type <major|minor|patch> -Message "<descripción>"
+```
+
+**Parámetros:**
+- `-Type` - Tipo de incremento: `major`, `minor`, o `patch`
+- `-Message` - Descripción del cambio para el changelog
+- `-DryRun` - Simular sin hacer cambios (opcional)
+
+**Ejemplos:**
+```powershell
+# Patch (bug fix)
+.\scripts\bump-version.ps1 -Type patch -Message "Corregir error en autenticación"
+
+# Minor (nueva funcionalidad)
+.\scripts\bump-version.ps1 -Type minor -Message "Añadir soporte para Kafka"
+
+# Major (breaking change)
+.\scripts\bump-version.ps1 -Type major -Message "Migración a PostgreSQL"
+
+# Simulación
+.\scripts\bump-version.ps1 -Type minor -Message "Nueva feature" -DryRun
+```
+
+**Automatización incluida:**
+1. Calcula nueva versión automáticamente
+2. Actualiza `VERSION`
+3. Actualiza `frontend/package.json`
+4. Actualiza `api-service/pyproject.toml`
+5. Actualiza `transmission-service/pyproject.toml`
+6. Añade entrada al `CHANGELOG.md`
+7. Crea commit con todos los cambios
+
+### 5. `git-release.ps1` - Crear Release Completo
+
+Equivalente PowerShell de `git-release.sh`.
+
+```powershell
+.\scripts\git-release.ps1 <version> [options]
+```
+
+**Parámetros:**
+- `-Version` - Versión SemVer (ej: 2.1.0, 2.1.0-beta.1)
+- `-DryRun` - Simulación sin cambios
+- `-Force` - Saltar confirmaciones
+- `-NoPush` - No hacer push automático
+
+**Ejemplos:**
+```powershell
+.\scripts\git-release.ps1 2.1.0
+.\scripts\git-release.ps1 2.1.0-beta.1
+.\scripts\git-release.ps1 2.2.0 -DryRun
+.\scripts\git-release.ps1 2.1.1 -Force
+```
+
+---
+
 ## 🚀 Flujo de Trabajo Recomendado
 
 ### Desarrollo de Feature
@@ -109,9 +174,9 @@ git commit -m "feat(auth): add OAuth2 support"
 ./scripts/deploy.sh production
 ```
 
-### Hotfix Urgente
+### Hotfix Urgente (PowerShell)
 
-```bash
+```powershell
 # 1. Crear hotfix desde main
 git checkout main
 git pull origin main
@@ -120,8 +185,10 @@ git checkout -b hotfix/correccion-critica
 # 2. Aplicar fix
 git commit -m "fix(api): resolve security vulnerability"
 
-# 3. Usar release script con patch
-./scripts/git-release.sh 2.1.1
+# 3. Usar bump-version con patch
+.\scripts\bump-version.ps1 -Type patch -Message "HOTFIX: Resolver vulnerabilidad de seguridad"
+
+# 4. Push y crear PR
 ```
 
 ---
@@ -129,6 +196,7 @@ git commit -m "fix(api): resolve security vulnerability"
 ## 📚 Referencias
 
 - [VERSIONING_GUIDE.md](../VERSIONING_GUIDE.md) - Guía completa de versionado
+- [EJEMPLOS_VERSIONADO.md](../EJEMPLOS_VERSIONADO.md) - Ejemplos prácticos de versionado
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Semantic Versioning](https://semver.org/)
 
@@ -137,6 +205,7 @@ git commit -m "fix(api): resolve security vulnerability"
 ## 🔧 Requisitos
 
 - **Git** >= 2.25
+- **PowerShell** >= 5.1 (para scripts .ps1)
 - **GitHub CLI** (opcional, para crear releases automáticamente)
   ```bash
   # Instalar gh CLI
@@ -147,7 +216,7 @@ git commit -m "fix(api): resolve security vulnerability"
   # Autenticar
   gh auth login
   ```
-- **jq** (opcional, para manipular package.json)
+- **jq** (opcional, para scripts bash)
   ```bash
   # macOS: brew install jq
   # Windows: winget install jqlang.jq
@@ -161,8 +230,9 @@ git commit -m "fix(api): resolve security vulnerability"
 2. **Commits:** Usa Conventional Commits para changelog automático.
 3. **Versiones:** Sigue SemVer (MAJOR.MINOR.PATCH).
 4. **Tests:** Ejecuta tests antes de crear release.
+5. **Windows:** Usa scripts `.ps1` en PowerShell, scripts `.sh` requieren Git Bash o WSL.
 
 ---
 
 **Mantenido por:** IoT-DevSim Team  
-**Última actualización:** 2026-02-13
+**Última actualización:** 2026-02-16
