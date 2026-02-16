@@ -30,7 +30,7 @@ export function Sidebar({ className }: SidebarProps) {
   // Build filtered items from navigation groups
   const items = React.useMemo(() => {
     const groups = navigationGroups.map((group) => (
-      filterNavigationItems(group.items, user?.permissions ?? [], user?.role ?? 'viewer')
+      filterNavigationItems(group.items, user?.permissions ?? [], user?.roles ?? ['viewer'])
     ));
     // Flatten groups for simple render (parent and its children)
     return groups.flat().flatMap((it) => it.children ? [it, ...it.children] : [it]);
@@ -80,21 +80,6 @@ export function Sidebar({ className }: SidebarProps) {
               })}
             </nav>
           </ScrollArea>
-
-          <Separator />
-
-          {/* Settings */}
-          <div className="p-4">
-            <Link to="/settings" onClick={closeSidebar}>
-              <Button
-                variant={location.pathname === '/settings' ? "secondary" : "ghost"}
-                className="w-full justify-start"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                {t.nav.settings}
-              </Button>
-            </Link>
-          </div>
         </div>
       </div>
     </>

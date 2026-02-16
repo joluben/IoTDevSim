@@ -43,10 +43,22 @@ from app.schemas.auth import (
     ResendVerificationRequest
 )
 from app.schemas.base import SuccessResponse, ErrorResponse
+from app.services.email_service import email_service
 
 logger = structlog.get_logger()
 router = APIRouter()
 security = HTTPBearer()
+
+
+def _send_password_reset_email_background(to_email: str, reset_token: str) -> None:
+    try:
+        email_service.send_password_reset_email(to_email=to_email, reset_token=reset_token)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Failed to send password reset email",
+            to_email=to_email,
+            error=str(exc),
+        )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -185,97 +197,11 @@ async def register(
     Raises:
         HTTPException: If registration fails
     """
-    try:
-        # Check if user already exists
-        result = await db.execute(
-            select(User).where(
-                User.email == register_data.email,
-                User.is_deleted == False
-            )
-        )
-        existing_user = result.scalar_one_or_none()
-        
-        if existing_user:
-            logger.warning("Registration attempt with existing email", email=register_data.email)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-        
-        # Create new user (run password hashing in executor)
-        hashed_password = await asyncio.to_thread(
-            get_password_hash, register_data.password
-        )
-        
-        new_user = User(
-            email=register_data.email,
-            full_name=register_data.full_name,
-            hashed_password=hashed_password,
-            is_active=True,
-            is_verified=False,  # Require email verification
-            is_superuser=False,
-            roles=["user"],
-            permissions=["devices:read", "devices:write", "projects:read", "projects:write"],
-            preferences={}
-        )
-        
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
-        
-        # Create tokens
-        access_token = create_access_token(
-            subject=str(new_user.id),
-            additional_claims={
-                "email": new_user.email,
-                "roles": new_user.roles or [],
-                "permissions": new_user.permissions or []
-            }
-        )
-        
-        refresh_token = create_refresh_token(subject=str(new_user.id))
-        
-        # Create user profile
-        user_profile = UserProfile(
-            id=str(new_user.id),
-            email=new_user.email,
-            full_name=new_user.full_name,
-            is_active=new_user.is_active,
-            is_verified=new_user.is_verified,
-            is_superuser=new_user.is_superuser,
-            avatar_url=new_user.avatar_url,
-            bio=new_user.bio,
-            roles=new_user.roles or [],
-            permissions=new_user.permissions or [],
-            created_at=new_user.created_at.isoformat(),
-            last_login=None
-        )
-        
-        # Create token response
-        tokens = TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=30 * 60  # 30 minutes
-        )
-        
-        logger.info("User registered successfully", email=new_user.email, user_id=new_user.id)
-        
-        return LoginResponse(
-            user=user_profile,
-            tokens=tokens,
-            message="Registration successful"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Registration error", error=str(e), email=register_data.email)
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration service error"
-        )
+    logger.warning("Public registration is disabled", attempted_email=register_data.email)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Public registration is disabled. Contact an administrator.",
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -401,9 +327,13 @@ async def request_password_reset(
         if user:
             # Generate reset token
             reset_token = generate_password_reset_token(user.email)
-            
-            # In a real implementation, send email with reset token
-            # background_tasks.add_task(send_password_reset_email, user.email, reset_token)
+
+            # Send reset email asynchronously
+            background_tasks.add_task(
+                _send_password_reset_email_background,
+                user.email,
+                reset_token,
+            )
             
             logger.info("Password reset requested", email=user.email, user_id=user.id)
         else:

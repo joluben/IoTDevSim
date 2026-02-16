@@ -26,7 +26,7 @@ import { useTheme } from '@/app/providers/theme-provider';
 import { useI18n } from '@/contexts/i18n-context';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { quickAccessItems, navigationGroups, filterNavigationItems, type NavigationItem } from '@/app/config/navigation';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 interface HeaderProps {
   className?: string;
@@ -86,7 +86,7 @@ export function Header({ className }: HeaderProps) {
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">IoT</span>
           </div>
-          <span className="font-semibold text-lg hidden sm:block">IoT-DevSim v2</span>
+          <span className="font-semibold text-lg hidden sm:block">DevSim</span>
         </div>
 
         {/* Spacer */}
@@ -154,11 +154,11 @@ export function Header({ className }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>{t.common.profile}</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>{t.nav.settings}</span>
               </DropdownMenuItem>
@@ -198,7 +198,7 @@ export function Header({ className }: HeaderProps) {
             const filtered = filterNavigationItems(
               group.items,
               user?.permissions ?? [],
-              user?.role ?? 'viewer'
+              user?.roles ?? ['viewer']
             );
 
             const flat: NavigationItem[] = filtered.flatMap((it) =>

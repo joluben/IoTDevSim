@@ -5,6 +5,7 @@
 
 import * as React from 'react';
 import { Plus, LayoutGrid, Table as TableIcon, Upload, Cpu } from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ export default function DatasetsPage() {
     // Dialog states
     const [isUploadOpen, setIsUploadOpen] = React.useState(false);
     const [isGenerateOpen, setIsGenerateOpen] = React.useState(false);
+    const [deletingDatasetId, setDeletingDatasetId] = React.useState<string | null>(null);
 
     // Queries
     const listQuery = useDatasets(filters);
@@ -94,10 +96,13 @@ export default function DatasetsPage() {
     };
 
     const handleDelete = (id: string) => {
-        if (!confirm('¿Estás seguro de que deseas eliminar este dataset?')) return;
+        setDeletingDatasetId(id);
+    };
 
+    const confirmDelete = () => {
+        if (!deletingDatasetId) return;
         deleteMutation.mutate(
-            { id },
+            { id: deletingDatasetId },
             {
                 onSuccess: () => {
                     addNotification({
@@ -105,6 +110,7 @@ export default function DatasetsPage() {
                         title: 'Dataset eliminado',
                         message: 'El dataset se ha eliminado correctamente.',
                     });
+                    setDeletingDatasetId(null);
                 },
                 onError: (error) => {
                     addNotification({
@@ -112,6 +118,7 @@ export default function DatasetsPage() {
                         title: 'Error al eliminar',
                         message: error instanceof Error ? error.message : 'No se pudo eliminar el dataset.',
                     });
+                    setDeletingDatasetId(null);
                 },
             }
         );
@@ -248,6 +255,18 @@ export default function DatasetsPage() {
             <UploadDatasetDialog open={isUploadOpen} onOpenChange={setIsUploadOpen} />
             <DatasetPreviewDialog />
             <GenerateDatasetDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
+
+            <ConfirmDialog
+                open={!!deletingDatasetId}
+                onOpenChange={(open) => { if (!open) setDeletingDatasetId(null); }}
+                title="Eliminar dataset"
+                description="¿Estás seguro de que deseas eliminar este dataset? Esta acción no se puede deshacer y los dispositivos vinculados perderán acceso a estos datos."
+                confirmLabel="Eliminar"
+                cancelLabel="Cancelar"
+                variant="destructive"
+                isLoading={deleteMutation.isPending}
+                onConfirm={confirmDelete}
+            />
         </PageContainer>
     );
 }

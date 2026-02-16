@@ -19,9 +19,9 @@ const ConnectionsPage = lazy(() => import('@/pages/connections-page'));
 const DatasetsPage = lazy(() => import('@/pages/datasets-page'));
 const AnalyticsPage = lazy(() => import('@/pages/analytics-page'));
 const SettingsPage = lazy(() => import('@/pages/settings-page'));
+const UsersManagementPage = lazy(() => import('../pages/users-management-page'));
 const ProfilePage = lazy(() => import('@/pages/profile-page'));
 const LoginPage = lazy(() => import('@/pages/login-page'));
-const RegisterPage = lazy(() => import('@/pages/register-page'));
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password-page'));
 const UnauthorizedPage = lazy(() => import('@/pages/unauthorized-page'));
 const NotFoundPage = lazy(() => import('@/pages/not-found-page'));
@@ -65,11 +65,6 @@ export function AppRouter() {
                   <LoginPage />
                 </PublicRoute>
               } />
-              <Route path="/register" element={
-                <PublicRoute>
-                  <RegisterPage />
-                </PublicRoute>
-              } />
               <Route path="/forgot-password" element={
                 <PublicRoute>
                   <ForgotPasswordPage />
@@ -101,6 +96,11 @@ export function AppRouter() {
               <Route path="/settings" element={
                 <ProtectedRoute requiredRole="admin">
                   <SettingsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings/users" element={
+                <ProtectedRoute requiredPermission="users:read" requiredRole="admin">
+                  <UsersManagementPage />
                 </ProtectedRoute>
               } />
               <Route path="/profile" element={<ProfilePage />} />

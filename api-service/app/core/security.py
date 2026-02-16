@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 import structlog
 
 from app.core.simple_config import settings
+from app.core.token_validator import IssuerAwareTokenValidator, LocalJWTValidationStrategy
 
 logger = structlog.get_logger()
 
@@ -27,6 +28,16 @@ REFRESH_TOKEN_EXPIRE_DAYS = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
 
 # joserfc key object (reusable)
 _jwt_key = OctKey.import_key(SECRET_KEY)
+
+_token_validator = IssuerAwareTokenValidator(
+    active_issuer=settings.AUTH_ACTIVE_ISSUER,
+    trusted_issuers=settings.AUTH_TRUSTED_ISSUERS,
+    local_strategy=LocalJWTValidationStrategy(
+        secret_key=SECRET_KEY,
+        algorithm=ALGORITHM,
+        issuer=settings.AUTH_LOCAL_ISSUER,
+    ),
+)
 
 
 def create_access_token(
@@ -113,56 +124,8 @@ def verify_token(token: str, token_type: str = "access") -> Optional[str]:
     Raises:
         HTTPException: If token is invalid or expired
     """
-    try:
-        token_obj = jose_jwt.decode(token, _jwt_key, algorithms=[ALGORITHM])
-        payload = token_obj.claims
-        
-        # Check token type
-        if payload.get("type") != token_type:
-            logger.warning("Invalid token type", expected=token_type, actual=payload.get("type"))
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        # Get subject
-        subject: str = payload.get("sub")
-        if subject is None:
-            logger.warning("Token missing subject")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing subject",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        # Check expiration
-        exp = payload.get("exp")
-        if exp and datetime.utcnow() > datetime.fromtimestamp(exp):
-            logger.warning("Token expired", subject=subject)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token expired",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        logger.debug("Token verified successfully", subject=subject, type=token_type)
-        return subject
-        
-    except (BadSignatureError, DecodeError, ExpiredTokenError, InvalidTokenError) as e:
-        logger.warning("JWT verification failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except ValueError as e:
-        logger.warning("JWT verification failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    result = _token_validator.validate(token, token_type=token_type)
+    return result.subject
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
