@@ -23,7 +23,7 @@ ENV VITE_ENVIRONMENT=${VITE_ENVIRONMENT}
 
 WORKDIR /app
 
-# Copy package files first for better caching
+# Copy package files
 COPY package*.json ./
 
 # Install dependencies
@@ -33,7 +33,6 @@ RUN npm ci
 COPY . .
 
 # Build for production
-# Vite will use the environment variables set above
 RUN npm run build
 
 # ═══════════════════════════════════════════════════════════════════
