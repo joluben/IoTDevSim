@@ -4,7 +4,6 @@
  */
 
 import * as React from 'react';
-import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider } from './query-provider';
 import { I18nProvider } from '@/contexts/i18n-context';
@@ -27,9 +26,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       >
         <QueryProvider>
           <I18nProvider>
-            <BrowserRouter>
-              {children || <AppRouter />}
-            </BrowserRouter>
+            {children || <AppRouter />}
             <NotificationsToaster />
           </I18nProvider>
         </QueryProvider>

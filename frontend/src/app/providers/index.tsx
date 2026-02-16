@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider, useQueryErrorHandler } from './query-provider';
 import { I18nProvider } from '@/contexts/i18n-context';
@@ -79,11 +78,9 @@ export function AppProviders({ children }: AppProvidersProps) {
       >
         <QueryProvider>
           <I18nProvider>
-            <BrowserRouter>
-              <AppInitializer>
-                {children || <AppRouter />}
-              </AppInitializer>
-            </BrowserRouter>
+            <AppInitializer>
+              {children || <AppRouter />}
+            </AppInitializer>
           </I18nProvider>
         </QueryProvider>
       </ThemeProvider>
