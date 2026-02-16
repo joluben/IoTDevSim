@@ -11,6 +11,7 @@ from sqlalchemy import select
 import structlog
 
 from app.core.database import get_db
+from app.core.permission_resolver import permission_resolver
 from app.core.security import verify_token, verify_api_key
 from app.models.user import User
 
@@ -225,7 +226,7 @@ def check_permissions(required_permissions: list[str]):
         if current_user.is_superuser:
             return current_user
         
-        user_permissions = current_user.permissions or []
+        user_permissions = permission_resolver.resolve_permissions(current_user)
         
         # Check if user has all required permissions
         for permission in required_permissions:

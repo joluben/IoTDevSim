@@ -12,7 +12,7 @@ import structlog
 import csv
 import io
 
-from app.core.deps import get_db
+from app.core.deps import check_permissions, get_db
 from app.services.project import project_service
 from app.repositories.device import device_repository
 from app.schemas.project import (
@@ -46,6 +46,7 @@ async def get_unassigned_devices(
     search: Optional[str] = Query(None, description="Search by name or device_id"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Get devices not assigned to any project."""
@@ -82,6 +83,7 @@ async def get_unassigned_devices(
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project_in: ProjectCreate,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Create a new project."""
@@ -107,6 +109,7 @@ async def list_projects(
     limit: int = Query(20, ge=1, le=100),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", description="asc or desc"),
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """List projects with filtering and pagination."""
@@ -140,6 +143,7 @@ async def list_projects(
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Get project by ID."""
@@ -156,6 +160,7 @@ async def get_project(
 async def update_project(
     project_id: UUID,
     project_in: ProjectUpdate,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Update a project."""
@@ -172,6 +177,7 @@ async def update_project(
 async def patch_project(
     project_id: UUID,
     project_in: ProjectUpdate,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Partial update of a project."""
@@ -187,6 +193,7 @@ async def patch_project(
 @router.delete("/{project_id}", response_model=SuccessResponse)
 async def delete_project(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Delete a project (soft delete). Stops transmissions and unassigns devices."""
@@ -209,6 +216,7 @@ async def delete_project(
 @router.post("/{project_id}/archive", response_model=ProjectResponse)
 async def archive_project(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Archive a project. Stops active transmissions."""
@@ -224,6 +232,7 @@ async def archive_project(
 @router.post("/{project_id}/unarchive", response_model=ProjectResponse)
 async def unarchive_project(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Unarchive a project."""
@@ -242,6 +251,7 @@ async def unarchive_project(
 @router.get("/{project_id}/devices")
 async def get_project_devices(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Get devices assigned to a project."""
@@ -274,6 +284,7 @@ async def get_project_devices(
 async def assign_devices(
     project_id: UUID,
     request: ProjectDeviceAssignRequest,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Assign devices to a project."""
@@ -290,6 +301,7 @@ async def assign_devices(
 async def unassign_device(
     project_id: UUID,
     device_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Remove a device from a project."""
@@ -309,6 +321,7 @@ async def unassign_device(
 async def start_transmissions(
     project_id: UUID,
     request: Optional[ProjectTransmissionRequest] = None,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Start transmissions for all project devices."""
@@ -324,6 +337,7 @@ async def start_transmissions(
 @router.post("/{project_id}/transmissions/pause", response_model=ProjectTransmissionResult)
 async def pause_transmissions(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Pause active transmissions (preserves row index)."""
@@ -339,6 +353,7 @@ async def pause_transmissions(
 @router.post("/{project_id}/transmissions/resume", response_model=ProjectTransmissionResult)
 async def resume_transmissions(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Resume paused transmissions from current row index."""
@@ -354,6 +369,7 @@ async def resume_transmissions(
 @router.post("/{project_id}/transmissions/stop", response_model=ProjectTransmissionResult)
 async def stop_transmissions(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Stop all transmissions and reset row indices."""
@@ -372,6 +388,7 @@ async def stop_transmissions(
 @router.get("/{project_id}/stats", response_model=ProjectStatsResponse)
 async def get_project_stats(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Get project transmission statistics."""
@@ -391,6 +408,7 @@ async def get_transmission_history(
     history_status: Optional[str] = Query(None, alias="status", description="Filter by status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Get paginated transmission history for all project devices."""
@@ -424,6 +442,7 @@ async def export_transmission_history(
     project_id: UUID,
     device_id: Optional[UUID] = Query(None),
     history_status: Optional[str] = Query(None, alias="status"),
+    current_user = Depends(check_permissions(["projects:read"])),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Export transmission history as CSV."""
@@ -469,6 +488,7 @@ async def export_transmission_history(
 @router.delete("/{project_id}/logs", response_model=SuccessResponse)
 async def clear_transmission_logs(
     project_id: UUID,
+    current_user = Depends(check_permissions(["projects:write"])),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Clear all transmission logs for a project."""

@@ -8,31 +8,31 @@
 @layer base {
   :root {
     /* Base colors */
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
+    --background: 0 0% 97%;
+    --foreground: 218 36% 18%;
     --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
+    --card-foreground: 218 36% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
+    --popover-foreground: 218 36% 18%;
     
     /* Primary colors - IoT Blue theme */
-    --primary: 217 91% 60%;
+    --primary: 238 82% 67%;
     --primary-foreground: 0 0% 100%;
     
     /* Secondary colors */
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 218 26% 92%;
+    --secondary-foreground: 217 19% 26%;
     
     /* Muted colors */
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 220 8% 46%;
     
     /* Accent colors */
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 227 88% 94%;
+    --accent-foreground: 217 19% 26%;
     
     /* Destructive colors */
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 86% 61%;
     --destructive-foreground: 210 40% 98%;
     
     /* Semantic colors for IoT status */
@@ -44,48 +44,73 @@
     --info-foreground: 210 40% 98%;
     
     /* Border and input */
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --border: 218 13% 84%;
+    --input: 218 13% 84%;
+    --ring: 238 82% 67%;
     
     /* Chart colors */
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 76% 36%;
-    --chart-3: 32 95% 44%;
-    --chart-4: 271 81% 56%;
-    --chart-5: 0 84% 60%;
+    --chart-1: 238 82% 67%;
+    --chart-2: 243 75% 59%;
+    --chart-3: 244 57% 51%;
+    --chart-4: 244 55% 42%;
+    --chart-5: 243 49% 35%;
+
+    /* Sidebar colors */
+    --sidebar: 0 0% 96%;
+    --sidebar-foreground: 218 36% 18%;
+    --sidebar-primary: 238 82% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 227 88% 94%;
+    --sidebar-accent-foreground: 217 19% 26%;
+    --sidebar-border: 218 13% 84%;
+    --sidebar-ring: 238 82% 67%; 
+    
+    /* Fonts */
+    --font-sans: Inter, sans-serif;
+    --font-serif: Merriweather, serif;
+    --font-mono: JetBrains Mono, monospace;
     
     /* Border radius */
     --radius: 0.5rem;
+
+    /* Shadow colors */
+    --shadow-2xs: 0px 4px 8px -1px 0 0% 0% / 0.05;
+    --shadow-xs: 0px 4px 8px -1px 0 0% 0% / 0.05;
+    --shadow-sm: 0px 4px 8px -1px 0 0% 0% / 0.10, 0px 1px 2px -2px 0 0% 0% / 0.10;
+    --shadow: 0px 4px 8px -1px 0 0% 0% / 0.10, 0px 1px 2px -2px 0 0% 0% / 0.10;
+    --shadow-md: 0px 4px 8px -1px 0 0% 0% / 0.10, 0px 2px 4px -2px 0 0% 0% / 0.10;
+    --shadow-lg: 0px 4px 8px -1px 0 0% 0% / 0.10, 0px 4px 6px -2px 0 0% 0% / 0.10;
+    --shadow-xl: 0px 4px 8px -1px 0 0% 0% / 0.10, 0px 8px 10px -2px 0 0% 0% / 0.10;
+    --shadow-2xl: 0px 4px 8px -1px 0 0% 0% / 0.25;
   }
 
   .dark {
     /* Base colors */
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --background: 221 48% 11%;
+    --foreground: 215 27% 91%;
+    --card: 218 36% 18%;
+    --card-foreground: 215 27% 91%;
+    --popover: 218 36% 18%;
+    --popover-foreground: 215 27% 91%;
     
     /* Primary colors - Brighter in dark mode */
-    --primary: 217 91% 65%;
-    --primary-foreground: 222.2 84% 4.9%;
+    --primary: 235 91% 74%;
+    --primary-foreground: 221 48% 11%;
     
     /* Secondary colors */
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 218 21% 23%;
+    --secondary-foreground: 218 13% 84%;
     
     /* Muted colors */
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 218 36% 18%;
+    --muted-foreground: 218 10% 65%;
     
     /* Accent colors */
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 217 19% 26%;
+    --accent-foreground: 218 13% 84%;
     
     /* Destructive colors */
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 86% 61%;
     --destructive-foreground: 210 40% 98%;
     
     /* Semantic colors for IoT status - adjusted for dark mode */
@@ -97,16 +122,39 @@
     --info-foreground: 222.2 84% 4.9%;
     
     /* Border and input */
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 217 91% 65%;
+    --border: 216 15% 35%;
+    --input: 216 15% 35%;
+    --ring: 235 91% 74%;
     
     /* Chart colors - adjusted for dark mode */
-    --chart-1: 217 91% 65%;
-    --chart-2: 142 71% 45%;
-    --chart-3: 32 95% 50%;
-    --chart-4: 271 81% 65%;
-    --chart-5: 0 84% 65%;
+    --chart-1: 235 91% 74%;
+    --chart-2: 238 82% 67%;
+    --chart-3: 243 75% 59%;
+    --chart-4: 244 57% 51%;
+    --chart-5: 244 55% 42%;
+
+    /* Sidebar colors */
+    --sidebar: 218 36% 18%;
+    --sidebar-foreground: 215 27% 91%;
+    --sidebar-primary: 235 91% 74%;
+    --sidebar-primary-foreground: 221 48% 11%;
+    --sidebar-accent: 217 19% 26%;
+    --sidebar-accent-foreground: 218 13% 84%;
+    --sidebar-border: 216 15% 35%;
+    --sidebar-ring: 235 91% 74%;
+      
+    /* Border radius */
+    --radius: 0.5rem;
+
+    /* Shadow colors */
+    --shadow-2xs: 0 1px 3px 0px 0 0% 0% / 0.05;
+    --shadow-xs: 0 1px 3px 0px 0 0% 0% / 0.05;
+    --shadow-sm: 0 1px 3px 0px 0 0% 0% / 0.10, 0 1px 2px -1px 0 0% 0% / 0.10;
+    --shadow: 0 1px 3px 0px 0 0% 0% / 0.10, 0 1px 2px -1px 0 0% 0% / 0.10;
+    --shadow-md: 0 1px 3px 0px 0 0% 0% / 0.10, 0 2px 4px -1px 0 0% 0% / 0.10;
+    --shadow-lg: 0 1px 3px 0px 0 0% 0% / 0.10, 0 4px 6px -1px 0 0% 0% / 0.10;
+    --shadow-xl: 0 1px 3px 0px 0 0% 0% / 0.10, 0 8px 10px -1px 0 0% 0% / 0.10;
+    --shadow-2xl: 0 1px 3px 0px 0 0% 0% / 0.25;
   }
 
   * {

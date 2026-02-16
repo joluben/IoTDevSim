@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { ROUTES } from '@/app/config/constants';
-import { useAuthStore } from '@/app/store';
+import { useAuthStore, type User } from '@/app/store';
 import ErrorBoundary, { AsyncErrorBoundary } from '@/components/common/error-boundary';
 
 // Lazy load components for code splitting
@@ -14,9 +14,10 @@ const ProjectDetailPage = React.lazy(() => import('@/pages/project-detail-page')
 const ProjectFormPage = React.lazy(() => import('@/pages/project-form-page'));
 const AnalyticsPage = React.lazy(() => import('@/pages/analytics-page'));
 const SettingsPage = React.lazy(() => import('@/pages/settings-page'));
+const UsersManagementPage = React.lazy(() => import('../../pages/users-management-page'));
+const DatasetsPage = React.lazy(() => import('@/pages/datasets-page'));
 const ProfilePage = React.lazy(() => import('@/pages/profile-page'));
 const LoginPage = React.lazy(() => import('@/pages/login-page'));
-const RegisterPage = React.lazy(() => import('@/pages/register-page'));
 const ForgotPasswordPage = React.lazy(() => import('@/pages/forgot-password-page'));
 const NotFoundPage = React.lazy(() => import('@/pages/not-found-page'));
 
@@ -49,7 +50,7 @@ function ProtectedRoute({ children, requiredPermission, requiredRole }: Protecte
     return <Navigate to={ROUTES.dashboard} replace />;
   }
 
-  if (requiredRole && !hasRole(requiredRole as any)) {
+  if (requiredRole && !hasRole(requiredRole)) {
     return <Navigate to={ROUTES.dashboard} replace />;
   }
 
@@ -101,17 +102,6 @@ const router = createBrowserRouter([
     children: [{ index: true, element: <LoginPage /> }],
   },
   {
-    path: ROUTES.register,
-    element: (
-      <SuspenseWrapper>
-        <PublicRoute>
-          <AuthLayout />
-        </PublicRoute>
-      </SuspenseWrapper>
-    ),
-    children: [{ index: true, element: <RegisterPage /> }],
-  },
-  {
     path: ROUTES.forgotPassword,
     element: (
       <SuspenseWrapper>
@@ -138,8 +128,8 @@ const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
       { path: 'connections/:id', element: <ConnectionsPage /> },
-      { path: 'datasets', element: <DevicesPage /> },
-      { path: 'datasets/:id', element: <DevicesPage /> },
+      { path: 'datasets', element: <DatasetsPage /> },
+      { path: 'datasets/:id', element: <DatasetsPage /> },
       { path: 'devices', element: <DevicesPage /> },
       { path: 'devices/new', element: <DeviceFormPage /> },
       { path: 'devices/:id/edit', element: <DeviceFormPage /> },
@@ -161,6 +151,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredRole="admin">
             <SettingsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'settings/users',
+        element: (
+          <ProtectedRoute requiredRole="admin" requiredPermission="users:read">
+            <UsersManagementPage />
           </ProtectedRoute>
         ),
       },
@@ -202,7 +200,6 @@ export const useCurrentRoute = () => {
     search: location.search,
     hash: location.hash,
     isProtected: !location.pathname.startsWith('/login') && 
-                 !location.pathname.startsWith('/register') && 
                  !location.pathname.startsWith('/forgot-password'),
   };
 };

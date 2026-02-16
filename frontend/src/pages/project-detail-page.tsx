@@ -13,6 +13,7 @@ import {
   XCircle,
   Percent,
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ export default function ProjectDetailPage() {
   const historyQuery = useProjectHistory(id!, historyFilters);
 
   const [lastResult, setLastResult] = React.useState<ProjectTransmissionResult | null>(null);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const startMutation = useStartTransmissions();
   const pauseMutation = usePauseTransmissions();
@@ -122,10 +124,23 @@ export default function ProjectDetailPage() {
   };
 
   const handleDelete = () => {
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = () => {
     deleteMutation.mutate(id!, {
       onSuccess: () => {
         addNotification({ type: 'success', title: 'Project deleted', message: '' });
+        setDeleteOpen(false);
         navigate('/projects');
+      },
+      onError: (error) => {
+        addNotification({
+          type: 'error',
+          title: 'Failed to delete project',
+          message: error instanceof Error ? error.message : 'Unexpected error',
+        });
+        setDeleteOpen(false);
       },
     });
   };
@@ -361,6 +376,26 @@ export default function ProjectDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete project"
+        description={
+          <>
+            Are you sure you want to delete <strong>{project.name}</strong>?
+            <br />
+            <span className="text-xs text-muted-foreground mt-1 block">
+              All associated device assignments and transmission history will be permanently lost.
+            </span>
+          </>
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+      />
     </PageContainer>
   );
 }

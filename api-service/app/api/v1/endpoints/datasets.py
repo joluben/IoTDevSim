@@ -12,7 +12,7 @@ import structlog
 import json
 import os
 
-from app.core.deps import get_db, get_current_user
+from app.core.deps import check_permissions, get_db, get_current_user
 from app.models.user import User
 from app.services.dataset import dataset_service
 from app.schemas.dataset import (
@@ -47,7 +47,7 @@ router = APIRouter()
 
 @router.get("/generators", response_model=List[GeneratorInfo])
 async def get_generator_types(
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(check_permissions(["datasets:read"]))
 ) -> Any:
     """
     Get available synthetic data generators.
@@ -73,7 +73,7 @@ async def get_generator_types(
 @router.get("/statistics")
 async def get_dataset_statistics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(check_permissions(["datasets:read"]))
 ) -> Any:
     """
     Get dataset statistics summary.
@@ -108,8 +108,8 @@ async def upload_dataset(
     has_header: bool = Form(True, description="Whether file has header row"),
     delimiter: str = Form(",", description="CSV delimiter character"),
     encoding: str = Form("utf-8", description="File encoding"),
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Upload a file to create a new dataset.
@@ -208,8 +208,8 @@ async def upload_dataset(
 async def generate_dataset(
     generate_request: DatasetGenerateRequest,
     background: bool = Query(False, description="Run generation as background task"),
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Generate a synthetic dataset.
@@ -299,7 +299,7 @@ async def generate_dataset(
 @router.get("/jobs/{job_id}", response_model=DatasetJobResponse)
 async def get_job_status(
     job_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(check_permissions(["datasets:read"]))
 ) -> Any:
     """
     Get the status of a background dataset generation job.
@@ -407,7 +407,7 @@ DATASET_TEMPLATES = [
 @router.get("/templates", response_model=List[DatasetTemplateResponse])
 async def get_dataset_templates(
     category: str = Query(None, description="Filter templates by category"),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(check_permissions(["datasets:read"]))
 ) -> Any:
     """Get available dataset templates for quick creation."""
     templates = DATASET_TEMPLATES
@@ -420,8 +420,8 @@ async def get_dataset_templates(
 async def generate_from_template(
     template_id: str,
     name: str = Query(None, description="Override dataset name"),
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """Generate a dataset from a predefined template."""
     template = next((t for t in DATASET_TEMPLATES if t.id == template_id), None)
@@ -450,8 +450,8 @@ async def generate_from_template(
 @router.post("", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
 async def create_dataset(
     dataset_in: DatasetCreate,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Create a new dataset manually.
@@ -495,8 +495,8 @@ async def list_datasets(
     limit: int = Query(20, ge=1, le=100, description="Maximum number of items to return"),
     sort_by: str = Query("created_at", description="Field to sort by"),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     List datasets with filtering, pagination, and search.
@@ -544,8 +544,8 @@ async def list_datasets(
 @router.get("/{dataset_id}", response_model=DatasetResponse)
 async def get_dataset(
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get dataset by ID.
@@ -578,8 +578,8 @@ async def get_dataset(
 async def update_dataset(
     dataset_id: UUID,
     dataset_in: DatasetUpdate,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Update dataset metadata.
@@ -611,8 +611,8 @@ async def update_dataset(
 async def delete_dataset(
     dataset_id: UUID,
     hard_delete: bool = Query(False, description="Perform hard delete instead of soft delete"),
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Delete dataset.
@@ -651,8 +651,8 @@ async def delete_dataset(
 async def get_dataset_preview(
     dataset_id: UUID,
     limit: int = Query(50, ge=1, le=500, description="Number of sample rows to return"),
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get dataset preview with sample data and statistics.
@@ -684,8 +684,8 @@ async def get_dataset_preview(
 @router.post("/{dataset_id}/validate", response_model=DatasetValidationResult)
 async def validate_dataset(
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Validate a dataset.
@@ -728,8 +728,8 @@ async def validate_dataset(
 @router.get("/{dataset_id}/download")
 async def download_dataset(
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Download the dataset file.
@@ -830,8 +830,8 @@ def _dataset_to_response(dataset) -> DatasetResponse:
 async def link_device_to_dataset(
     dataset_id: UUID,
     link_data: DeviceDatasetLink,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """Link a device to a dataset."""
     from app.models.dataset import device_datasets
@@ -872,8 +872,8 @@ async def link_device_to_dataset(
 @router.get("/{dataset_id}/devices", response_model=List[DeviceDatasetLinkResponse])
 async def get_dataset_devices(
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """Get all devices linked to a dataset."""
     from app.models.dataset import device_datasets
@@ -903,8 +903,8 @@ async def get_dataset_devices(
 async def unlink_device_from_dataset(
     dataset_id: UUID,
     device_id: UUID,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> None:
     """Remove a device-dataset link."""
     from app.models.dataset import device_datasets
@@ -921,14 +921,16 @@ async def unlink_device_from_dataset(
     if result.rowcount == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
 
+    return None
+
 
 # ==================== Versioning Endpoints [L3] ====================
 
 @router.get("/{dataset_id}/versions", response_model=List[DatasetVersionResponse])
 async def list_dataset_versions(
     dataset_id: UUID,
+    current_user = Depends(check_permissions(["datasets:read"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """List all versions of a dataset."""
     dataset = await dataset_service.get_dataset(db, dataset_id)
@@ -952,8 +954,8 @@ async def list_dataset_versions(
 async def create_dataset_version(
     dataset_id: UUID,
     version_data: DatasetVersionCreate,
+    current_user = Depends(check_permissions(["datasets:write"])),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ) -> Any:
     """Create a new version snapshot of a dataset."""
     dataset = await dataset_service.get_dataset(db, dataset_id)

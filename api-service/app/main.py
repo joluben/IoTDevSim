@@ -13,11 +13,12 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.core.simple_config import settings
-from app.core.database import engine, Base
+from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.logging import setup_logging
 from app.api.v1.router import api_router
-from app.middleware.security import SecurityHeadersMiddleware
+from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware
+from app.services.bootstrap_admin import ensure_bootstrap_admin_exists
 
 # Setup structured logging
 setup_logging()
@@ -34,8 +35,12 @@ async def lifespan(app: FastAPI):
         # Create database tables
         async with engine.begin() as conn:
             # Import models to ensure they are registered
-            from app.models import device, project, connection, transmission_log, dataset
+            from app.models import connection, dataset, device, project, transmission_log, user
             await conn.run_sync(Base.metadata.create_all)
+
+        # Ensure bootstrap admin exists (idempotent)
+        async with AsyncSessionLocal() as session:
+            await ensure_bootstrap_admin_exists(session)
         
         logger.info("Database tables created successfully")
         
@@ -61,24 +66,67 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add security middlewares
+# ==========================================
+# CORS Middleware - MUST be added FIRST
+# ==========================================
+# CORS must be configured before any security middleware
+# to ensure preflight requests are handled correctly
+
+# Build CORS origins list
+cors_origins = []
+
+if settings.ENVIRONMENT == "development":
+    # In development: allow common frontend development ports
+    # and any additional origins from CORS_ORIGINS env var
+    cors_origins = [
+        "http://localhost:3000",      # React default
+        "http://localhost:5173",      # Vite default
+        "http://localhost:5174",      # Vite alternative
+        "http://localhost:5175",      # Vite alternative
+        "http://localhost:5176",      # Vite alternative
+        "http://127.0.0.1:3000",      # React default (IP)
+        "http://127.0.0.1:5173",      # Vite default (IP)
+        "http://127.0.0.1:5174",      # Vite alternative (IP)
+        "http://127.0.0.1:5175",      # Vite alternative (IP)
+        "http://127.0.0.1:5176",      # Vite alternative (IP)
+    ]
+    # Add any custom origins from env (for Docker, external tools, etc.)
+    if settings.CORS_ORIGINS:
+        for origin in settings.CORS_ORIGINS:
+            if origin not in cors_origins:
+                cors_origins.append(origin)
+else:
+    # In production: use only explicitly configured origins
+    cors_origins = settings.CORS_ORIGINS if settings.CORS_ORIGINS else []
+
+logger.info(f"Configuring CORS for environment: {settings.ENVIRONMENT}")
+logger.info(f"Allowed origins: {cors_origins}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,  # Required for JWT authentication
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-Requested-With",
+        "X-CSRF-Token",
+        "Origin",
+    ],
+    expose_headers=["X-Total-Count"],  # For pagination headers
+    max_age=600,  # Cache preflight requests for 10 minutes
+)
+
+# ==========================================
+# Security Middlewares (after CORS)
+# ==========================================
 app.add_middleware(SecurityHeadersMiddleware)
-from app.middleware.security import RateLimitMiddleware, RequestValidationMiddleware
 app.add_middleware(RateLimitMiddleware)
-app.add_middleware(RequestValidationMiddleware)
 
 # Add logging middleware
 app.add_middleware(LoggingMiddleware)
-
-# Add CORS middleware
-if settings.CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 # Add trusted host middleware for production
 if settings.ENVIRONMENT == "production":
