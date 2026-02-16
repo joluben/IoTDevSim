@@ -49,3 +49,6 @@ celery==5.4.0
 # Rate limiting
 slowapi==0.1.9
 
+# S3-compatible storage (MinIO, AWS S3)
+boto3==1.36.22
+
