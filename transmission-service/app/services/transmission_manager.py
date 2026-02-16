@@ -20,6 +20,7 @@ from sqlalchemy import select, update, cast, func as sa_func, String as SAString
 
 from app.core.database import AsyncSessionLocal
 from app.core.config import settings, TRANSMISSION_CONFIG
+from app.core.storage import storage
 from app.models import Connection, Device, TransmissionLog
 from app.services.protocols import protocol_registry, PublishResult
 from app.services.connection_pool import ConnectionPool
@@ -561,13 +562,19 @@ class TransmissionManager:
 
             # Resolve file path
             file_path = dataset.file_path
+            
+            # Determine base path based on environment
+            base_path = os.environ.get('DATASETS_BASE_PATH', '/app/uploads')
             if file_path and not file_path.startswith('/'):
-                file_path = f"/workspace/api-service/{file_path}"
+                file_path = f"{base_path}/{file_path}"
+            elif file_path and '/workspace/api-service/' in file_path:
+                # Convert legacy workspace path to Docker path
+                file_path = file_path.replace('/workspace/api-service/', f"{base_path}/")
 
-            # Read CSV/JSON file
+            # Read CSV/JSON file using storage backend
             try:
-                rows = self._read_dataset_file(dataset.file_path, dataset.file_format)
-                file_hash = self._get_file_hash(file_path)
+                rows = storage.read_dataset(dataset.file_path, dataset.file_format)
+                file_hash = self._get_file_hash(file_path) if file_path.startswith('/') else f"{ds_id}:{len(rows)}"
 
                 # Store in cache (Phase 2 — 5.1)
                 self._dataset_cache[ds_key] = CachedDataset(
@@ -591,10 +598,15 @@ class TransmissionManager:
 
     def _read_dataset_file(self, file_path: str, file_format: Optional[str]) -> List[Dict[str, Any]]:
         """Read rows from a dataset file (CSV or JSON)"""
-        # Convert relative paths to absolute paths for container
+        # Determine base path based on environment
+        base_path = os.environ.get('DATASETS_BASE_PATH', '/app/uploads')
+        
+        # Convert relative paths to absolute paths
         if file_path and not file_path.startswith('/'):
-            # Assume relative to /workspace/api-service
-            file_path = f"/workspace/api-service/{file_path}"
+            file_path = f"{base_path}/{file_path}"
+        elif file_path and '/workspace/api-service/' in file_path:
+            # Convert legacy workspace path to Docker path
+            file_path = file_path.replace('/workspace/api-service/', f"{base_path}/")
         
         if not file_path or not os.path.exists(file_path):
             logger.warning("Dataset file not found", path=file_path, exists=os.path.exists(file_path) if file_path else False)
