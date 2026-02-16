@@ -239,10 +239,12 @@ class DatasetService:
                     metadata.encoding
                 )
             else:
-                local_path = Path(storage.get_path(storage_key))
+                # For S3 storage, download and parse from bytes
+                storage_key = f"datasets/{dataset.id}.{file_ext}"
+                file_bytes = await storage.download(storage_key)
                 df = await asyncio.to_thread(
-                    self._parse_file,
-                    local_path,
+                    self._parse_bytes,
+                    file_bytes,
                     file_ext,
                     metadata.has_header,
                     metadata.delimiter,
@@ -491,14 +493,19 @@ class DatasetService:
                         dataset.file_format or 'csv',
                     )
                     data = df.head(limit).to_dict(orient='records')
-                elif os.path.exists(dataset.file_path):
-                    df = await asyncio.to_thread(
-                        self._parse_file_preview,
-                        Path(dataset.file_path),
-                        dataset.file_format or 'csv',
-                        limit
-                    )
-                    data = df.to_dict(orient='records')
+                else:
+                    # For S3 or local storage, download and parse from bytes
+                    try:
+                        storage_key = f"datasets/{dataset.id}.{dataset.file_format or 'csv'}"
+                        file_bytes = await storage.download(storage_key)
+                        df = await asyncio.to_thread(
+                            self._parse_bytes,
+                            file_bytes,
+                            dataset.file_format or 'csv',
+                        )
+                        data = df.head(limit).to_dict(orient='records')
+                    except Exception as e:
+                        logger.warning("Failed to download/parse file for preview", error=str(e))
             except Exception as e:
                 logger.warning("Failed to read file for preview", error=str(e))
         
@@ -562,12 +569,14 @@ class DatasetService:
         errors = []
         warnings = []
         
-        # Check if file exists
-        if dataset.file_path and not os.path.exists(dataset.file_path):
-            errors.append({
-                'type': 'file_not_found',
-                'message': f"Dataset file not found: {dataset.file_path}"
-            })
+        # Check if file exists in storage
+        if dataset.file_path:
+            storage_key = f"datasets/{dataset.id}.{dataset.file_format or 'csv'}"
+            if not await storage.exists(storage_key):
+                errors.append({
+                    'type': 'file_not_found',
+                    'message': f"Dataset file not found in storage: {storage_key}"
+                })
         
         # Check for empty dataset
         if dataset.row_count == 0:
