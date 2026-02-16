@@ -47,7 +47,7 @@ const validateEnv = (): EnvironmentConfig => {
     PROD: import.meta.env.PROD || false,
     
     // API Configuration
-    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL || defaultConfig.VITE_API_BASE_URL!,
+    VITE_API_BASE_URL: import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || defaultConfig.VITE_API_BASE_URL!,
     VITE_WS_URL: import.meta.env.VITE_WS_URL || defaultConfig.VITE_WS_URL!,
     
     // Feature Flags

@@ -1,0 +1,24 @@
+# Nixpacks Configuration for IoT-DevSim Frontend
+# https://nixpacks.com/docs/configuration/file
+
+[phases.setup]
+# Use Node.js 20
+nixpkgs = ['nodejs_20']
+
+[phases.install]
+cmds = ['npm ci']
+
+[phases.build]
+cmds = ['npm run build']
+
+[phases.setup.env]
+NODE_ENV = 'production'
+NPM_CONFIG_PRODUCTION = 'false'
+
+# Environment variables available during build
+[phases.build.env]
+NODE_ENV = 'production'
+
+[start]
+# Serve static files with a simple server
+cmd = 'npx serve -s dist -l 80'
