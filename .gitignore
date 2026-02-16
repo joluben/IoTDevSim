@@ -19,6 +19,7 @@
 *apikey*
 *secret*
 *password*
+!*password-page*
 *credential*
 token.json
 credentials.json
