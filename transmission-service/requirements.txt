@@ -22,6 +22,9 @@ websocket-client==1.9.0
 # Encryption (shared with API service for config decryption)
 cryptography==46.0.0
 
+# S3/MinIO storage support
+boto3==1.36.22
+
 # Logging
 structlog==25.1.0
 
