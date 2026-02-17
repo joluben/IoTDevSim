@@ -25,11 +25,16 @@ class Settings(BaseSettings):
     DATASETS_BASE_PATH: str = Field(default="/app/uploads", description="Base path for local dataset storage")
     
     # S3/MinIO Configuration
+    # Use case 1: Connect to external MinIO/S3 server (most common)
     S3_ENDPOINT_URL: Optional[str] = Field(default=None, description="S3 endpoint URL")
     S3_BUCKET: str = Field(default="iot-devsim-datasets", description="S3 bucket name")
-    S3_ACCESS_KEY: Optional[str] = Field(default=None, description="S3 access key")
-    S3_SECRET_KEY: Optional[str] = Field(default=None, description="S3 secret key")
+    S3_ACCESS_KEY: Optional[str] = Field(default=None, description="S3 access key (for external MinIO/S3)")
+    S3_SECRET_KEY: Optional[str] = Field(default=None, description="S3 secret key (for external MinIO/S3)")
     S3_REGION: str = Field(default="us-east-1", description="S3 region")
+    
+    # Use case 2: Run embedded MinIO server within the service (rare)
+    MINIO_ROOT_USER: Optional[str] = Field(default=None, description="MinIO root user (only if running embedded MinIO server)")
+    MINIO_ROOT_PASSWORD: Optional[str] = Field(default=None, description="MinIO root password (only if running embedded MinIO server)")
     
     # Database (shared with API service)
     DATABASE_URL: str = Field(..., description="PostgreSQL database URL")
