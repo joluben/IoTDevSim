@@ -17,6 +17,20 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Debug mode")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
     
+    # Server Configuration
+    TRANSMISSION_PORT: int = Field(default=8001, description="Transmission service port")
+    
+    # Storage Backend Configuration
+    STORAGE_BACKEND: str = Field(default="local", description="Storage backend: local or s3")
+    DATASETS_BASE_PATH: str = Field(default="/app/uploads", description="Base path for local dataset storage")
+    
+    # S3/MinIO Configuration
+    S3_ENDPOINT_URL: Optional[str] = Field(default=None, description="S3 endpoint URL")
+    S3_BUCKET: str = Field(default="iot-devsim-datasets", description="S3 bucket name")
+    S3_ACCESS_KEY: Optional[str] = Field(default=None, description="S3 access key")
+    S3_SECRET_KEY: Optional[str] = Field(default=None, description="S3 secret key")
+    S3_REGION: str = Field(default="us-east-1", description="S3 region")
+    
     # Database (shared with API service)
     DATABASE_URL: str = Field(..., description="PostgreSQL database URL")
     DB_POOL_SIZE: int = Field(default=10, description="Database connection pool size")
