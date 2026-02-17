@@ -59,6 +59,14 @@ class TransmissionStats:
 
 
 @dataclass
+class CachedConnection:
+    """Cache entry for connection config (avoids SQLAlchemy DetachedInstanceError)"""
+    protocol: str
+    config: Dict[str, Any]
+    cached_at: float
+
+
+@dataclass
 class CachedDataset:
     """Cache entry for a loaded dataset file (Phase 2 — 5.1)"""
     rows: List[Dict[str, Any]]
@@ -116,7 +124,7 @@ class TransmissionManager:
         )
 
         # Performance: Connection config cache with TTL (Phase 1 — 5.2)
-        self._connection_cache: Dict[str, Tuple[Any, float]] = {}  # conn_id → (Connection, timestamp)
+        self._connection_cache: Dict[str, Tuple[CachedConnection, float]] = {}  # conn_id → (CachedConnection, timestamp)
         self._CONNECTION_CACHE_TTL = 30.0  # seconds
 
         # Performance: Dataset file cache with hash invalidation (Phase 2 — 5.1)
@@ -690,15 +698,15 @@ class TransmissionManager:
             logger.error("Failed to get connection", connection_id=connection_id, error=str(e))
             return None
 
-    async def _get_connection_cached(self, session: AsyncSession, connection_id: str) -> Optional[Connection]:
-        """Fetch connection with TTL cache (Phase 1 — 5.2). Avoids DB round-trip per transmission."""
+    async def _get_connection_cached(self, session: AsyncSession, connection_id: str) -> Optional[CachedConnection]:
+        """Fetch connection with TTL cache (Phase 1 — 5.2). Returns primitive values to avoid DetachedInstanceError."""
         now = time.time()
         cached = self._connection_cache.get(connection_id)
         if cached:
-            conn, cached_at = cached
+            conn_data, cached_at = cached
             if now - cached_at < self._CONNECTION_CACHE_TTL:
                 CACHE_HITS.labels(cache_type="connection").inc()
-                return conn
+                return conn_data
 
         CACHE_MISSES.labels(cache_type="connection").inc()
         db_start = time.perf_counter()
@@ -706,8 +714,20 @@ class TransmissionManager:
         DB_QUERIES_TOTAL.labels(operation="get_connection").inc()
         DB_QUERY_DURATION.labels(operation="get_connection").observe(time.perf_counter() - db_start)
         if conn:
-            self._connection_cache[connection_id] = (conn, now)
-        return conn
+            # Extract primitive values to avoid DetachedInstanceError
+            protocol_str = conn.protocol
+            if hasattr(protocol_str, 'value'):
+                protocol_str = protocol_str.value
+            protocol_str = str(protocol_str).lower()
+            
+            cached_conn = CachedConnection(
+                protocol=protocol_str,
+                config=conn.config or {},
+                cached_at=now
+            )
+            self._connection_cache[connection_id] = (cached_conn, now)
+            return cached_conn
+        return None
 
     async def _publish_with_retry(
         self,
@@ -790,25 +810,22 @@ class TransmissionManager:
         try:
             async with AsyncSessionLocal() as session:
                 # Load connection configuration (Phase 1 — 5.2: cached)
-                connection = await self._get_connection_cached(session, state.connection_id)
-                if not connection:
+                cached_conn = await self._get_connection_cached(session, state.connection_id)
+                if not cached_conn:
                     logger.error("Connection not found for device", 
                                device=state.device_ref, connection_id=state.connection_id)
                     return
 
-                # Get protocol handler (handle SQLAlchemy Enum safely)
-                protocol_str = connection.protocol
-                if hasattr(protocol_str, 'value'):
-                    protocol_str = protocol_str.value
-                protocol_str = str(protocol_str).lower()
+                # Get protocol handler (cached connection already has protocol as string)
+                protocol_str = cached_conn.protocol
                 handler = protocol_registry.get_handler(protocol_str)
                 if not handler:
                     logger.error("No handler for protocol", 
-                               protocol=connection.protocol, device=state.device_ref)
+                               protocol=protocol_str, device=state.device_ref)
                     return
 
                 # Parse connection config
-                config = connection.config or {}
+                config = cached_conn.config
 
                 # Decrypt sensitive fields (Phase 1 — 5.7: static import)
                 if _HAS_ENCRYPTION:
