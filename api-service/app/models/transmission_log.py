@@ -23,8 +23,8 @@ class TransmissionLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     timestamp = Column(DateTime(timezone=True), primary_key=True, server_default=func.now(), index=True)
     
-    # Project reference (for persistent project statistics)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
+    # Project reference (for persistent project statistics) - optional for direct device transmission
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=True, index=True)
     
     # Device and connection references
     device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False, index=True)
