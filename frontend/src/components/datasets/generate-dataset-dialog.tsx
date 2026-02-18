@@ -54,7 +54,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGenerateDataset, useGeneratorTypes } from '@/hooks/useDatasets';
 import { useUIStore } from '@/app/store/ui-store';
 import type { GeneratorType, DatasetGenerateRequest } from '@/types/dataset';
@@ -183,10 +182,10 @@ export function GenerateDatasetDialog({ open, onOpenChange }: GenerateDatasetDia
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-                            <ScrollArea className="flex-1 h-full px-6 pb-6">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col min-h-0">
+                            <div className="flex-1 overflow-y-auto px-6 py-4">
                                 {step === 1 ? (
                                     <div className="space-y-4 pt-4">
                                         <div className="grid grid-cols-1 gap-3">
@@ -596,9 +595,9 @@ export function GenerateDatasetDialog({ open, onOpenChange }: GenerateDatasetDia
                                         </div>
                                     </div>
                                 )}
-                            </ScrollArea>
+                            </div>
 
-                            <DialogFooter className="p-6 border-t bg-muted/20">
+                            <DialogFooter className="p-6 border-t bg-muted/20 shrink-0">
                                 {step === 1 ? (
                                     <>
                                         <Button variant="outline" type="button" onClick={resetAndClose}>
