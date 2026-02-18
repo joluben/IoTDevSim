@@ -16,6 +16,12 @@ class AuthInitializer {
     }
 
     try {
+      // Always set up API client unauthorized callback first
+      // This ensures 401 errors will trigger logout even if token is invalid
+      apiClient.setUnauthorizedCallback(() => {
+        useAuthStore.getState().logout();
+      });
+
       // Check if user has valid tokens
       const isAuthenticated = authService.isAuthenticated();
       
@@ -24,11 +30,6 @@ class AuthInitializer {
         const isValid = await authService.verifyToken();
         
         if (isValid) {
-          // Set up API client unauthorized callback
-          apiClient.setUnauthorizedCallback(() => {
-            useAuthStore.getState().logout();
-          });
-          
           // Start session timeout monitoring
           useAuthStore.getState().startSessionTimeout();
           
