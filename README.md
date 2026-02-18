@@ -44,7 +44,169 @@ A comprehensive IoT device simulation and management platform for testing and de
 - **PostgreSQL** (Port 5432): Primary database
 - **Redis** (Port 6379): Caching and session management
 
-## Quick Start
+## Deploy Notes
+
+### Required Services (Core)
+
+These services are mandatory for the application to function:
+
+| Service | Purpose | Port | Required |
+|---------|---------|------|----------|
+| **PostgreSQL** | Primary database for all data | 5432 | ✅ Yes |
+| **API Service** | Main FastAPI backend (business logic, auth, device management) | 8000 | ✅ Yes |
+| **Transmission Service** | IoT device transmission handler (MQTT/HTTP/Kafka) | 8001 | ✅ Yes |
+| **Redis** | Caching, sessions, and Celery broker | 6379 | ✅ Yes |
+| **Frontend (Docker)** | A frontend served from Docker | ✅ Yes |
+
+### Optional Services
+
+| Service | When to Deploy | Profile |
+|---------|----------------|---------|
+| **MinIO** | When using `STORAGE_BACKEND=s3` for dataset storage | `storage` |
+| **Celery Worker** | For background async tasks (large dataset generation, bulk operations) | `worker` |
+
+### Deployment Options
+
+#### Option 1: Full Docker Deployment (Recommended for Production)
+
+Deploy all services:
+
+```bash
+# Clone and start all services
+git clone <repository-url>
+cd iot-devsim
+cp .env.example .env
+# Edit .env with your production settings
+
+docker-compose up -d
+```
+
+#### Option 2: Hybrid - Backend in Docker, Frontend as External Service
+
+Use this when you want to deploy the frontend separately (e.g., Vercel, Netlify, or custom CDN):
+
+```bash
+# Start only backend services (no frontend container)
+docker-compose up -d postgres redis api-service transmission-service
+
+# Or use profiles to exclude specific services
+docker-compose up -d --scale frontend=0
+```
+
+Then deploy frontend externally:
+
+```bash
+cd frontend
+npm install
+npm run build
+# Deploy 'dist/' folder to your static hosting
+```
+
+Configure frontend environment:
+```bash
+# .env.production or hosting environment variables
+VITE_API_URL=https://your-api-domain.com
+VITE_WS_URL=wss://your-api-domain.com/ws
+```
+
+#### Option 3: External S3/MinIO Storage
+
+When using external MinIO or AWS S3 for datasets:
+
+```bash
+# Start core services + MinIO
+docker-compose --profile storage up -d
+```
+
+Configure in `.env`:
+```env
+STORAGE_BACKEND=s3
+S3_ENDPOINT_URL=https://your-minio-domain.com/
+S3_BUCKET=iot-devsim-datasets
+S3_ACCESS_KEY=your-access-key
+S3_SECRET_KEY=your-secret-key
+S3_REGION=us-east-1
+```
+
+#### Option 4: With Background Workers
+
+For heavy async workloads:
+
+```bash
+# Start all services including Celery worker
+docker-compose --profile worker up -d
+```
+
+### Storage Configuration
+
+#### Local Storage (Default)
+Uses Docker volumes for dataset storage:
+```bash
+# No additional configuration needed
+# Datasets stored in: ./api-service/uploads/datasets
+```
+
+#### S3/MinIO Storage
+For distributed or scalable storage:
+
+1. **With Docker MinIO** (self-hosted):
+   ```bash
+   docker-compose --profile storage up -d minio
+   ```
+
+2. **With External MinIO/S3**:
+   - Set `S3_ENDPOINT_URL` to your external endpoint
+   - Do NOT start the MinIO profile
+
+### Environment Variables
+
+See `.env.example` for full list. Key variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `REDIS_URL` | ✅ | Redis connection URL (e.g., `redis://redis:6379/0`) |
+| `REDIS_PORT` | ❌ | Redis port mapping for Docker (default: `6379`) |
+| `JWT_SECRET_KEY` | ✅ | JWT signing secret (change in production!) |
+| `STORAGE_BACKEND` | ❌ | `local` (default) or `s3` |
+| `S3_ENDPOINT_URL` | ❌ | Required if `STORAGE_BACKEND=s3` |
+| `S3_BUCKET` | ❌ | S3 bucket name |
+| `S3_ACCESS_KEY` | ❌ | S3 access key |
+| `S3_SECRET_KEY` | ❌ | S3 secret key |
+| `TRANSMISSION_BATCH_SIZE` | ❌ | Messages per batch (default: 100) |
+| `TRANSMISSION_INTERVAL_MS` | ❌ | Transmission interval (default: 1000) |
+
+### Database Migrations
+
+After deployment, run migrations:
+
+```bash
+# Inside Docker
+docker-compose exec api-service alembic upgrade head
+
+# Or manually
+cd api-service
+alembic upgrade head
+```
+
+### Production Checklist
+
+- [ ] Change `JWT_SECRET_KEY` from default
+- [ ] Set `ENVIRONMENT=production`
+- [ ] Configure proper `CORS_ORIGINS` for your domain
+- [ ] Use strong database passwords
+- [ ] Enable HTTPS for API endpoints
+- [ ] Configure backup for PostgreSQL data
+- [ ] Set up monitoring/alerting (optional)
+- [ ] Use external S3/MinIO for large-scale storage (optional)
+
+### Health Checks
+
+All services expose health endpoints:
+- API Service: `GET /health` (port 8000)
+- Transmission Service: `GET /health` (port 8001)
+
+## Quick Start (Development)
 
 ### Prerequisites
 
@@ -52,46 +214,28 @@ A comprehensive IoT device simulation and management platform for testing and de
 - Node.js 18+ (for frontend development)
 - Python 3.11+ (for backend development)
 
-### Using Docker (Recommended)
+### Development Setup
 
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd iot-devsim-v2
+cd iot-devsim
 
-# Start all services
-docker-compose up -d
+# Start core services
+docker-compose up -d postgres redis
 
-# View logs
-docker-compose logs -f
-```
-
-### Manual Setup
-
-#### 1. Database Setup
-```bash
-# PostgreSQL must be running
-# Update .env with your database credentials
-cp .env.example .env
-```
-
-#### 2. API Service
-```bash
+# Run backend services (manual for hot reload)
 cd api-service
 pip install -r requirements.txt -r requirements-dev.txt
 alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
 
-#### 3. Transmission Service
-```bash
+# In another terminal - Transmission Service
 cd transmission-service
 pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
-```
 
-#### 4. Frontend
-```bash
+# In another terminal - Frontend
 cd frontend
 npm install
 npm run dev
@@ -137,17 +281,16 @@ iot-devsim-v2/
 ├── transmission-service/  # Transmission handling
 ├── frontend/             # React/TypeScript SPA
 ├── database/             # Database initialization
-├── documentation/        # Project docs
+├── docs/                 # Project docs
 ├── docker-compose.yml    # Service orchestration
-└── README.md            # This file
+└── README.md             # This file
 ```
 
 ## Documentation
 
-- [Product Overview](./documentation/steering/product.md)
-- [Technology Stack](./documentation/steering/tech.md)
-- [Project Structure](./documentation/steering/structure.md)
-- [Implementation Plan](./documentation/transmission-service-implementation-fix.md)
+- [Product Overview](./docs/steering/product.md)
+- [Technology Stack](./docs/steering/tech.md)
+- [Project Structure](./docs/steering/structure.md)
 
 ## Contributing
 
@@ -175,5 +318,3 @@ iot-devsim-v2/
 MIT License - see LICENSE file for details.
 
 ---
-
-**Status**: Phases 1-6 complete. Connection pooling, circuit breaker, and comprehensive test suite operational.

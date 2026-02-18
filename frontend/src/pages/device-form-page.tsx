@@ -21,7 +21,9 @@ import { useConnections } from "@/hooks/useConnections";
 import { useDatasets } from "@/hooks/useDatasets";
 import { useUIStore } from "@/app/store/ui-store";
 import { deviceFormSchema } from "@/types/device";
-import type { DeviceFormValues } from "@/types/device";
+import type { DeviceFormValues, DeviceUpdateRequest, DeviceCreateRequest, DeviceMetadata, DeviceStatus } from "@/types/device";
+import type { Connection } from "@/types/connection";
+import type { DatasetSummary } from "@/types/dataset";
 
 export default function DeviceFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,13 +46,13 @@ export default function DeviceFormPage() {
   const updateMutation = useUpdateDevice();
   const patchMutation = usePatchDevice();
 
-  const connections = (connectionsQuery.data?.items ?? []).map((c: any) => ({
+  const connections = (connectionsQuery.data?.items ?? []).map((c: Connection) => ({
     id: c.id,
     name: c.name,
-    protocol_type: c.protocol_type,
+    protocol_type: c.protocol,
   }));
 
-  const datasets = (datasetsQuery.data?.items ?? []).map((d: any) => ({
+  const datasets = (datasetsQuery.data?.items ?? []).map((d: DatasetSummary) => ({
     id: d.id,
     name: d.name,
     row_count: d.row_count ?? 0,
@@ -153,11 +155,11 @@ export default function DeviceFormPage() {
           payload.transmission_frequency = values.transmission_frequency;
         }
 
-        await updateMutation.mutateAsync({ id, payload: payload as any });
+        await updateMutation.mutateAsync({ id, payload: payload as DeviceUpdateRequest });
 
         // Update metadata separately if any fields are set
         if (Object.keys(metadata).length > 0) {
-          await patchMutation.mutateAsync({ id, payload: metadata as any });
+          await patchMutation.mutateAsync({ id, payload: metadata as unknown as DeviceUpdateRequest });
         }
 
         addNotification({
@@ -182,7 +184,7 @@ export default function DeviceFormPage() {
         }
         if (Object.keys(metadata).length > 0) payload.metadata = metadata;
 
-        const created = await createMutation.mutateAsync(payload as any);
+        const created = await createMutation.mutateAsync(payload as unknown as DeviceCreateRequest);
 
         addNotification({
           type: "success",
@@ -210,7 +212,7 @@ export default function DeviceFormPage() {
         case "play":
           await patchMutation.mutateAsync({
             id,
-            payload: { transmission_enabled: true } as any,
+            payload: { transmission_enabled: true } as Partial<DeviceUpdateRequest>,
           });
           form.setValue("transmission_enabled", true);
           setLocalTransmissionStatus("transmitting");
@@ -219,7 +221,7 @@ export default function DeviceFormPage() {
         case "pause":
           await patchMutation.mutateAsync({
             id,
-            payload: { transmission_enabled: false } as any,
+            payload: { transmission_enabled: false } as Partial<DeviceUpdateRequest>,
           });
           form.setValue("transmission_enabled", false);
           setLocalTransmissionStatus("paused");
@@ -228,7 +230,7 @@ export default function DeviceFormPage() {
         case "stop":
           await patchMutation.mutateAsync({
             id,
-            payload: { transmission_enabled: false, current_row_index: 0 } as any,
+            payload: { transmission_enabled: false, current_row_index: 0 } as Partial<DeviceUpdateRequest>,
           });
           form.setValue("transmission_enabled", false);
           setLocalTransmissionStatus("stopped");
@@ -320,7 +322,7 @@ export default function DeviceFormPage() {
                 datasets={datasets}
                 isEditing={isEditing}
                 onTransmissionAction={handleTransmissionAction}
-                transmissionStatus={(localTransmissionStatus ?? deviceQuery.data?.status ?? "idle") as any}
+                transmissionStatus={(localTransmissionStatus ?? deviceQuery.data?.status ?? "idle") as DeviceStatus}
                 lastTransmissionAt={localLastTransmission ?? deviceQuery.data?.last_transmission_at}
                 currentRowIndex={localRowIndex ?? deviceQuery.data?.current_row_index ?? 0}
                 onRefresh={async () => {
