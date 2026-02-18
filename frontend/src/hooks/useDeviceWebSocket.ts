@@ -29,6 +29,12 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
   const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const optionsRef = useRef({ subscribeAll, deviceIds, onMessage });
+
+  // Keep refs in sync with latest values to avoid stale closures
+  useEffect(() => {
+    optionsRef.current = { subscribeAll, deviceIds, onMessage };
+  }, [subscribeAll, deviceIds, onMessage]);
 
   const getWsUrl = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -61,13 +67,15 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
     ws.onopen = () => {
       setConnected(true);
 
-      if (subscribeAll) {
+      const opts = optionsRef.current;
+      if (opts.subscribeAll) {
         send({ action: 'subscribe_all' });
       }
-      deviceIds.forEach((id) => subscribeDevice(id));
+      opts.deviceIds.forEach((id) => subscribeDevice(id));
     };
 
     ws.onmessage = (event) => {
+      const opts = optionsRef.current;
       try {
         const msg: DeviceWSMessage = JSON.parse(event.data);
 
@@ -76,9 +84,10 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
           queryClient.invalidateQueries({ queryKey: ['devices'] });
         }
 
-        onMessage?.(msg);
-      } catch {
-        // ignore parse errors
+        opts.onMessage?.(msg);
+      } catch (err) {
+        // Log parse errors for debugging
+        console.warn('WebSocket message parse error:', err);
       }
     };
 
@@ -98,7 +107,11 @@ export function useDeviceWebSocket(options: UseDeviceWebSocketOptions = {}) {
   }, [getWsUrl, subscribeAll, deviceIds, subscribeDevice, send, onMessage, queryClient, autoConnect]);
 
   const disconnect = useCallback(() => {
-    clearTimeout(reconnectTimer.current);
+    // Clear reconnect timer to prevent memory leaks
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = undefined;
+    }
     wsRef.current?.close();
     wsRef.current = null;
     setConnected(false);

@@ -8,9 +8,11 @@ IoT DevSim v2 is a comprehensive IoT device simulation and management platform d
 
 - **Connection Management**: Support for multiple IoT protocols (MQTT, HTTP/HTTPS, Kafka) with secure credential storage and connection testing
 - **Device Simulation**: Create and manage virtual IoT devices with customizable data payloads and transmission patterns
+- **Dataset Management**: Synthetic dataset generation with configurable data types (numeric, string, timestamp, boolean, JSON)
 - **Project Organization**: Group devices into projects for organized testing scenarios and bulk operations
-- **Real-time Monitoring**: Live dashboard with transmission logs, performance metrics, and system health monitoring
+- **Real-time Monitoring**: Live dashboard with transmission logs via WebSocket, performance metrics, and system health monitoring
 - **Bulk Operations**: CSV import/export, bulk device creation, and mass transmission control
+- **Auto Logout**: Automatic session termination on 401 authentication errors
 - **Connection Pooling**: Efficient connection reuse per device connection to minimize connection overhead
 - **Circuit Breaker Pattern**: Automatic failure detection with graceful degradation and exponential backoff recovery
 - **Resilient Error Handling**: Retry logic with exponential backoff, detailed error logging to TransmissionLog.metadata, and automatic device status updates on persistent failures

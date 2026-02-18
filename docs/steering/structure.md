@@ -27,9 +27,12 @@ api-service/
 │   │   ├── endpoints/    # Individual endpoint modules
 │   │   │   ├── auth.py
 │   │   │   ├── connections.py
+│   │   │   ├── datasets.py
 │   │   │   ├── devices.py
+│   │   │   ├── health.py
 │   │   │   ├── projects.py
-│   │   │   └── users.py
+│   │   │   ├── users.py
+│   │   │   └── ws.py
 │   │   └── router.py     # Main API router
 │   ├── core/             # Core application configuration
 │   │   ├── config.py     # Application settings
@@ -104,15 +107,24 @@ transmission-service/
 frontend/src/
 ├── app/                 # Application-level configuration
 │   ├── config/          # Constants, environment, navigation
-│   ├── providers/       # React context providers (theme, query)
+│   ├── providers/       # React context providers (theme, query, auth)
 │   ├── router/          # React Router configuration
 │   └── store/           # Zustand state management
+│       ├── app-store.ts      # Application-level state
+│       ├── auth-store.ts     # Authentication state
+│       ├── dataset-store.ts  # Dataset management state
+│       ├── device-store.ts   # Device management state
+│       ├── ui-store.ts       # UI state (sidebar, theme, notifications)
+│       └── index.ts
 ├── components/          # Reusable UI components
 │   ├── ui/              # shadcn/ui base components
 │   ├── common/          # Shared application components
 │   ├── layout/          # Layout components (header, sidebar, etc.)
 │   ├── auth/            # Authentication-related components
 │   ├── connections/     # Connection management components
+│   ├── datasets/        # Dataset management components
+│   ├── devices/         # Device management components
+│   ├── projects/        # Project management components
 │   └── forms/           # Form components and utilities
 ├── features/            # Feature-based organization
 │   ├── auth/            # Authentication feature
@@ -124,8 +136,7 @@ frontend/src/
 ├── services/            # API communication layer
 ├── types/               # TypeScript type definitions
 ├── utils/               # Utility functions and helpers
-├── styles/              # Global styles and Tailwind configuration
-└── tests/               # Test files organized by feature
+└── styles/              # Global styles and Tailwind configuration
 ```
 
 ### Component Organization Principles
