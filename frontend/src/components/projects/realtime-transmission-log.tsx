@@ -17,12 +17,17 @@ export function RealtimeTransmissionLog({
 }: RealtimeTransmissionLogProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  // Auto-scroll to bottom when new entries arrive
+  // Auto-scroll to bottom when new entries arrive (throttled with RAF)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [entries]);
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const rafId = requestAnimationFrame(() => {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [entries.length]);
 
   const displayEntries = entries.slice(-maxEntries);
 

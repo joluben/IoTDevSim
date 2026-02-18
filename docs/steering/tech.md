@@ -49,6 +49,7 @@ IoT DevSim v2 follows a microservices architecture with the following components
 ### Monitoring & Logging
 - **structlog**: Structured logging
 - **prometheus-client**: Metrics collection
+- **WebSocket**: Real-time transmission logs to frontend
 - **uvicorn**: ASGI server with auto-reload
 
 ## Frontend Technology Stack
@@ -80,8 +81,9 @@ IoT DevSim v2 follows a microservices architecture with the following components
 
 ### Containerization
 - **Docker**: Container runtime
-- **Docker Compose**: Multi-service orchestration
-- Development and production Dockerfile stages
+- **Docker Compose**: Multi-service orchestration with:
+  - `docker-compose.yml`: Development configuration
+  - `docker-compose-production.yml`: Production configuration with environment-specific settings, volume persistence, resource limits, and security configurations
 
 ### Database Management
 ```bash
@@ -145,8 +147,11 @@ npm run format
 
 #### Full Stack (Docker)
 ```bash
-# Start all services
+# Start all services (development)
 docker-compose up -d
+
+# Start production stack
+docker-compose -f docker-compose-production.yml up -d
 
 # View logs
 docker-compose logs -f api-service
@@ -156,6 +161,9 @@ docker-compose logs -f transmission-service
 docker-compose build
 docker-compose up -d --build
 
+# Rebuild single service
+docker-compose up -d --build transmission-service
+
 # Stop all services
 docker-compose down
 ```
@@ -164,10 +172,11 @@ docker-compose down
 
 ### Required Environment Variables
 - `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
+- `REDIS_URL`: Redis connection string (e.g., `redis://localhost:6379/0`)
 - `JWT_SECRET_KEY`: Secret for JWT token signing
 - `CORS_ORIGINS`: Allowed frontend origins
 - `ENVIRONMENT`: development/production
+- `REDIS_PASSWORD`: Redis authentication (production only)
 
 ### Port Configuration
 - API Service: 8000
