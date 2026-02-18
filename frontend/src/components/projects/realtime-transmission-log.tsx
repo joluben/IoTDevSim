@@ -94,7 +94,7 @@ function LogEntryItem({ entry, isLatest }: LogEntryItemProps) {
         {entry.protocol}
       </Badge>
       
-      <span className="font-medium truncate max-w-[120px]">
+      <span className="font-medium truncate max-w-[250px]">
         {entry.device_name || 'Unknown'}
       </span>
       

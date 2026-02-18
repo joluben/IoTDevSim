@@ -97,6 +97,7 @@ class DeviceTransmissionState:
     last_transmission: float = 0
     next_jitter: float = 0
     error_count: int = 0
+    is_transmitting: bool = False  # Flag to prevent duplicate transmissions
 
 
 class TransmissionManager:
@@ -306,6 +307,9 @@ class TransmissionManager:
                     now = time.time()
                     due_devices: List[DeviceTransmissionState] = []
                     for dev_id, state in list(self.active_devices.items()):
+                        # Skip if already transmitting (prevents duplicates)
+                        if state.is_transmitting:
+                            continue
                         if now - state.last_transmission >= state.frequency + state.next_jitter:
                             due_devices.append(state)
 
@@ -315,14 +319,18 @@ class TransmissionManager:
 
                         # Phase 3 (5.6): Transmit all due devices concurrently with semaphore
                         async def _guarded_transmit(s: DeviceTransmissionState):
-                            async with self._transmit_semaphore:
-                                try:
-                                    await self._transmit_for_device(s)
-                                    s.last_transmission = time.time()
-                                    s.next_jitter = (random.randint(0, s.jitter_ms) / 1000) if s.jitter_ms > 0 else 0
-                                except Exception as e:
-                                    logger.error("Device transmission error",
-                                                 device=s.device_ref, error=str(e))
+                            s.is_transmitting = True  # Mark as transmitting
+                            try:
+                                async with self._transmit_semaphore:
+                                    try:
+                                        await self._transmit_for_device(s)
+                                        s.last_transmission = time.time()
+                                        s.next_jitter = (random.randint(0, s.jitter_ms) / 1000) if s.jitter_ms > 0 else 0
+                                    except Exception as e:
+                                        logger.error("Device transmission error",
+                                                     device=s.device_ref, error=str(e))
+                            finally:
+                                s.is_transmitting = False  # Always reset flag
 
                         await asyncio.gather(
                             *[_guarded_transmit(s) for s in due_devices],
