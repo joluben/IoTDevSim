@@ -3,7 +3,7 @@
  * Axios instance with interceptors for all API communications
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosResponse, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG } from '@/app/config/constants';
 import { TokenStorage } from './auth.service';
 import { csrfAxiosInterceptor, getCSRFHeaders } from '@/utils/csrf';
@@ -13,7 +13,16 @@ export interface ApiError {
   message: string;
   status: number;
   code?: string;
-  details?: any;
+  details?: unknown;
+}
+
+// API Error response from backend
+export interface ApiErrorResponse {
+  detail?: string;
+  message?: string;
+  code?: string;
+  details?: unknown;
+  errors?: Record<string, string[]>;
 }
 
 // Create centralized API client
@@ -50,10 +59,10 @@ class ApiClient {
         // Add CSRF headers for state-changing requests
         const mutatingMethods = ['post', 'put', 'patch', 'delete'];
         if (config.method && mutatingMethods.includes(config.method.toLowerCase())) {
-          config.headers = {
-            ...config.headers,
-            ...getCSRFHeaders(),
-          } as any;
+          const csrfHeaders = getCSRFHeaders();
+          Object.entries(csrfHeaders).forEach(([key, value]) => {
+            config.headers.set(key, value);
+          });
         }
 
         // Add timestamp for cache busting if needed
@@ -94,33 +103,33 @@ class ApiClient {
   }
 
   // HTTP Methods
-  async get<T = any>(url: string, config?: any): Promise<T> {
-    const response = await this.api.get(url, config);
+  async get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.get<T>(url, config);
     return response.data;
   }
 
-  async post<T = any>(url: string, data?: any, config?: any): Promise<T> {
-    const response = await this.api.post(url, data, config);
+  async post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.post<T>(url, data, config);
     return response.data;
   }
 
-  async put<T = any>(url: string, data?: any, config?: any): Promise<T> {
-    const response = await this.api.put(url, data, config);
+  async put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.put<T>(url, data, config);
     return response.data;
   }
 
-  async patch<T = any>(url: string, data?: any, config?: any): Promise<T> {
-    const response = await this.api.patch(url, data, config);
+  async patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.patch<T>(url, data, config);
     return response.data;
   }
 
-  async delete<T = any>(url: string, config?: any): Promise<T> {
-    const response = await this.api.delete(url, config);
+  async delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.delete<T>(url, config);
     return response.data;
   }
 
   // File upload with progress
-  async upload<T = any>(
+  async upload<T = unknown>(
     url: string,
     file: File,
     onProgress?: (progress: number) => void
@@ -163,22 +172,23 @@ class ApiClient {
   }
 
   // Error handling
-  private handleError(error: any): ApiError {
+  private handleError(error: unknown): ApiError {
     if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
       const apiError: ApiError = {
         message:
-          error.response?.data?.detail ||
-          error.response?.data?.message ||
-          error.message,
-        status: error.response?.status || 0,
-        code: error.response?.data?.code,
-        details: error.response?.data?.details,
+          axiosError.response?.data?.detail ||
+          axiosError.response?.data?.message ||
+          axiosError.message,
+        status: axiosError.response?.status || 0,
+        code: axiosError.response?.data?.code,
+        details: axiosError.response?.data?.details,
       };
       return apiError;
     }
 
     return {
-      message: error.message || 'An unexpected error occurred',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
       status: 0,
     };
   }
@@ -191,7 +201,7 @@ class ApiClient {
   // Allow registering extra interceptors in a controlled way
   registerInterceptors(
     onRequest?: (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>,
-    onResponse?: (response: any) => any,
+    onResponse?: (response: AxiosResponse<unknown>) => AxiosResponse<unknown> | Promise<AxiosResponse<unknown>>,
   ): void {
     if (onRequest) this.api.interceptors.request.use(onRequest);
     if (onResponse) this.api.interceptors.response.use(onResponse);

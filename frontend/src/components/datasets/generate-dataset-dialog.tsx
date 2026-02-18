@@ -186,7 +186,7 @@ export function GenerateDatasetDialog({ open, onOpenChange }: GenerateDatasetDia
                 <div className="flex-1 min-h-0 overflow-hidden">
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
-                            <ScrollArea className="flex-1 min-h-0 px-6 pb-6">
+                            <ScrollArea className="flex-1 h-full px-6 pb-6">
                                 {step === 1 ? (
                                     <div className="space-y-4 pt-4">
                                         <div className="grid grid-cols-1 gap-3">

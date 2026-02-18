@@ -34,6 +34,7 @@ import {
 } from '@/hooks/useProjects';
 import { useConnections } from '@/hooks/useConnections';
 import { projectFormSchema, type ProjectFormValues } from '@/types/project';
+import type { Connection } from '@/types/connection';
 import { useUIStore } from '@/app/store/ui-store';
 
 export default function ProjectFormPage() {
@@ -223,7 +224,7 @@ export default function ProjectFormPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="__none__">No default (use device connection)</SelectItem>
-                        {connections.map((conn: any) => (
+                        {connections.map((conn: Connection) => (
                           <SelectItem key={conn.id} value={conn.id}>
                             {conn.name} ({conn.protocol})
                           </SelectItem>

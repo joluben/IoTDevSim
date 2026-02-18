@@ -208,7 +208,7 @@ export const deviceFormSchema = z.object({
   is_active: z.boolean(),
   connection_id: z.string().optional().or(z.literal("")),
   transmission_enabled: z.boolean(),
-  transmission_frequency: z.number().int().min(1).max(172800).optional(),
+  transmission_frequency: z.number().int().min(1, "Frequency must be at least 1 second").max(172800, "Frequency must be at most 48 hours (172800 seconds)").optional(),
   include_device_id: z.boolean(),
   include_timestamp: z.boolean(),
   auto_reset: z.boolean(),
@@ -221,6 +221,17 @@ export const deviceFormSchema = z.object({
   port: z.number().int().min(1).max(65535).nullable().optional(),
   capabilities: z.array(z.string()).optional(),
   custom_metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}).refine(
+  (data) => {
+    if (data.transmission_enabled) {
+      return data.transmission_frequency !== undefined && data.transmission_frequency !== null && data.transmission_frequency >= 1;
+    }
+    return true;
+  },
+  {
+    message: "Transmission frequency is required when transmission is enabled",
+    path: ["transmission_frequency"],
+  }
+);
 
 export type DeviceFormValues = z.infer<typeof deviceFormSchema>;

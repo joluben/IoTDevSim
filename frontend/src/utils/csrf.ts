@@ -4,6 +4,7 @@
  */
 
 import { generateSecureToken } from './security';
+import { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 // CSRF token storage key
 const CSRF_TOKEN_KEY = 'iot-devsim-csrf-token';
@@ -145,21 +146,21 @@ export const getCSRFHeaders = (): Record<string, string> => {
  * Axios interceptor for automatic CSRF token inclusion
  */
 export const csrfAxiosInterceptor = {
-  request: (config: any) => {
+  request: (config: InternalAxiosRequestConfig) => {
     // Add CSRF token to state-changing requests
     const stateMutatingMethods = ['post', 'put', 'patch', 'delete'];
     
     if (config.method && stateMutatingMethods.includes(config.method.toLowerCase())) {
-      config.headers = {
-        ...config.headers,
-        ...getCSRFHeaders()
-      };
+      const csrfHeaders = getCSRFHeaders();
+      Object.entries(csrfHeaders).forEach(([key, value]) => {
+        config.headers.set(key, value);
+      });
     }
     
     return config;
   },
   
-  response: (response: any) => {
+  response: (response: AxiosResponse) => {
     // Check if server sent a new CSRF token
     const newToken = response.headers['x-csrf-token'] || response.headers['X-CSRF-Token'];
     if (newToken) {
@@ -170,10 +171,11 @@ export const csrfAxiosInterceptor = {
     return response;
   },
   
-  error: (error: any) => {
+  error: (error: AxiosError) => {
     // If we get a CSRF error, refresh the token
-    if (error.response?.status === 403 && 
-        error.response?.data?.message?.includes('CSRF')) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    if (axiosError.response?.status === 403 && 
+        axiosError.response?.data?.message?.includes('CSRF')) {
       csrfTokenManager.refreshToken();
     }
     

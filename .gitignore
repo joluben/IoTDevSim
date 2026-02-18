@@ -251,5 +251,5 @@ test_*.html
 example/
 documentation/
 audits/
-.agent/
 .agents/
+.windsurf/

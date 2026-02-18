@@ -403,8 +403,8 @@ export function AdvancedConnectionTest({
                     <div className="px-4 py-2 border-b bg-muted/50">
                       <span className="text-sm font-medium">Detalles Técnicos</span>
                     </div>
-                    <div className="p-4">
-                      <pre className="text-xs font-mono overflow-auto">
+                    <div className="p-4 overflow-x-auto">
+                      <pre className="text-xs font-mono whitespace-pre-wrap break-all">
                         {JSON.stringify(result.details, null, 2)}
                       </pre>
                     </div>

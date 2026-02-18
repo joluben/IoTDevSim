@@ -137,7 +137,7 @@ class AuthService {
   private logoutStrategy: LogoutStrategy;
   private failedQueue: Array<{
     resolve: (value: string) => void;
-    reject: (error: any) => void;
+    reject: (error: Error) => void;
   }> = [];
 
   constructor() {
@@ -203,7 +203,8 @@ class AuthService {
             }
             return this.api(originalRequest);
           } catch (refreshError) {
-            this.processQueue(refreshError, null);
+            const typedError = refreshError instanceof Error ? refreshError : new Error(String(refreshError));
+            this.processQueue(typedError, null);
             this.logout();
             return Promise.reject(refreshError);
           } finally {
@@ -216,7 +217,7 @@ class AuthService {
     );
   }
 
-  private processQueue(error: any, token: string | null): void {
+  private processQueue(error: Error | null, token: string | null): void {
     this.failedQueue.forEach(({ resolve, reject }) => {
       if (error) {
         reject(error);
@@ -229,22 +230,23 @@ class AuthService {
   }
 
   // Transform raw API response to AuthResponse
-  private mapAuthResponse(raw: any): AuthResponse {
-    const tokens = raw.tokens || {};
-    const user = raw.user || {};
+  private mapAuthResponse(raw: unknown): AuthResponse {
+    const rawData = raw as Record<string, unknown>;
+    const tokens = (rawData.tokens as Record<string, unknown>) || {};
+    const user = (rawData.user as Record<string, unknown>) || {};
     const mapped: AuthResponse = {
-      token: tokens.access_token || raw.token || '',
-      refreshToken: tokens.refresh_token || raw.refreshToken || '',
-      expiresIn: tokens.expires_in || raw.expiresIn || 1800,
+      token: (tokens.access_token as string) || (rawData.token as string) || '',
+      refreshToken: (tokens.refresh_token as string) || (rawData.refreshToken as string) || '',
+      expiresIn: (tokens.expires_in as number) || (rawData.expiresIn as number) || 1800,
       user: {
-        id: user.id || '',
-        email: user.email || '',
-        name: user.full_name || user.name || '',
-        avatar: user.avatar_url || user.avatar,
-        roles: user.roles || ['user'],
-        permissions: user.permissions || [],
-        createdAt: user.created_at || user.createdAt || '',
-        lastLoginAt: user.last_login || user.lastLoginAt,
+        id: (user.id as string) || '',
+        email: (user.email as string) || '',
+        name: (user.full_name as string) || (user.name as string) || '',
+        avatar: (user.avatar_url as string) || (user.avatar as string),
+        roles: (user.roles as string[]) || ['user'],
+        permissions: (user.permissions as string[]) || [],
+        createdAt: (user.created_at as string) || (user.createdAt as string) || '',
+        lastLoginAt: (user.last_login as string) || (user.lastLoginAt as string),
       },
     };
     return mapped;
@@ -359,9 +361,10 @@ class AuthService {
     return TokenStorage.getToken();
   }
 
-  private handleError(error: any): Error {
+  private handleError(error: unknown): Error {
     if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.message || error.message;
+      const axiosError = error as AxiosError<{ message?: string }>;
+      const message = axiosError.response?.data?.message || axiosError.message;
       return new Error(message);
     }
     return error instanceof Error ? error : new Error('An unexpected error occurred');
