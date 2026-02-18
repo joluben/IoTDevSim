@@ -463,9 +463,7 @@ class TransmissionManager:
                         # Sync row index and include flags from DB (Task 6.8 fix)
                         # FIX: Only sync row index if device is not currently transmitting
                         # to avoid race condition that causes duplicate transmissions
-                        now = time.time()
-                        is_transmitting = (now - state.last_transmission) < state.frequency
-                        if not is_transmitting:
+                        if not state.is_transmitting:
                             state.current_row_index = dev.current_row_index or 0
                         state.include_device_id = tc.get("include_device_id", True)
                         state.include_timestamp = tc.get("include_timestamp", True)
