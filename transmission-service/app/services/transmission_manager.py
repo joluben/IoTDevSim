@@ -282,7 +282,7 @@ class TransmissionManager:
                             include_timestamp=tc.get("include_timestamp", True),
                             dataset_rows=rows,
                             dataset_row_count=len(rows),
-                            last_transmission=0,
+                            last_transmission=time.time(),  # Initialize to now so first transmission respects frequency
                         )
                         self.active_devices[device_id] = state
                         logger.info("Device force-added to transmission",
@@ -497,7 +497,7 @@ class TransmissionManager:
                             include_timestamp=tc.get("include_timestamp", True),
                             dataset_rows=rows,
                             dataset_row_count=len(rows),
-                            last_transmission=0,
+                            last_transmission=time.time(),  # Initialize to now so first transmission respects frequency
                         )
                         self.active_devices[dev_key] = state
                         logger.info("Device added to transmission",
