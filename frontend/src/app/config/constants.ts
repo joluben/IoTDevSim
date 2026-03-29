@@ -19,6 +19,15 @@ export const API_CONFIG = {
   retryDelay: 1000, // 1 second
 } as const;
 
+// Agent Service Configuration
+export const AGENT_CONFIG = {
+  baseUrl: import.meta.env.VITE_AGENT_SERVICE_URL || 'http://localhost:8002',
+  healthCheckInterval: 30000, // 30 seconds
+  sseReconnectDelay: 1000, // 1 second initial
+  sseMaxReconnectDelay: 30000, // 30 seconds max
+  sessionStorageKey: 'iotdevsim-agent-session',
+} as const;
+
 // WebSocket Configuration
 export const WS_CONFIG = {
   url: import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws',
