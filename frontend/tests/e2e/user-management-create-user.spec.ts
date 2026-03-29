@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
 // Helper to generate unique email to avoid conflicts on re-runs
-const TEST_USER_EMAIL = `toni.idrica+${Date.now()}@gmail.com`;
-const TEST_USER_NAME = 'Toni 2';
+const TEST_USER_EMAIL = `test+${Date.now()}@gmail.com`;
+const TEST_USER_NAME = 'test';
 
 // Admin credentials from backend bootstrap defaults
 const ADMIN_EMAIL = 'admin@iotdevsim.com';

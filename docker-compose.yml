@@ -179,6 +179,46 @@ services:
     profiles:
       - worker
 
+  # Agent Service — AI Assistant (optional, use --profile agent)
+  agent-service:
+    build:
+      context: ./agent-service
+      dockerfile: Dockerfile
+      target: development
+    container_name: iot-devsim-agent
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - API_SERVICE_URL=http://api-service:8000/api/v1
+      - REDIS_URL=redis://redis:6379/2
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-llama3.1:8b}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.3}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-1024}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - PYTHONPATH=/app
+    volumes:
+      - ./agent-service:/app
+    ports:
+      - "${AGENT_PORT:-8002}:8002"
+    networks:
+      - iot-network
+    depends_on:
+      api-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+    profiles:
+      - agent
+
 volumes:
   postgres_data:
     driver: local

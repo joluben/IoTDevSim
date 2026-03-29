@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { isDevelopment } from '@/app/config/env';
 import { API_CONFIG } from '@/app/config/constants';
 
 interface QueryProviderProps {
@@ -35,7 +33,7 @@ const createQueryClient = () => {
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
         
         // Refetch on window focus in production only
-        refetchOnWindowFocus: !isDevelopment(),
+        refetchOnWindowFocus: true,
         
         // Refetch on reconnect
         refetchOnReconnect: true,
@@ -74,11 +72,6 @@ export function QueryProvider({ children }: QueryProviderProps) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {isDevelopment() && (
-        <ReactQueryDevtools
-          initialIsOpen={false}
-        />
-      )}
     </QueryClientProvider>
   );
 }

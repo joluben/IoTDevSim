@@ -1,0 +1,36 @@
+# Core framework
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+pydantic>=2.9,<3.0
+pydantic-settings==2.12.0
+
+# Agent framework — V1 estable (API estabilizada en sept. 2025)
+pydantic-ai==1.58.0
+
+# LLM providers
+openai==2.20.0
+httpx==0.28.1
+
+# Token management
+tiktoken==0.12.0
+
+# Security
+# python-jose[cryptography] ELIMINADO — CVE-2024-33663 (algorithm confusion, CVSS 7.4)
+joserfc==1.0.1
+
+# Caching
+redis==7.1.1
+
+# Logging
+structlog==25.5.0
+
+# Data processing (LLM-assisted dataset generator)
+polars>=1.0.0
+numpy>=1.26.0
+
+# Utilities
+python-dotenv>=1.1.0
+
+# Testing
+pytest==8.3.5
+pytest-asyncio==0.25.0

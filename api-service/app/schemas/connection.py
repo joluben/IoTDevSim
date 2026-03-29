@@ -234,7 +234,7 @@ class ConnectionCreate(BaseCreateSchema):
             elif self.protocol == ProtocolType.KAFKA:
                 KafkaConfig(**self.config)
         except Exception as e:
-            raise ValueError(f"Invalid {self.protocol.value} configuration: {str(e)}")
+            raise ValueError(f"Invalid {self.protocol} configuration: {str(e)}")
         return self
 
 
@@ -266,7 +266,7 @@ class ConnectionUpdate(BaseUpdateSchema):
                 elif self.protocol == ProtocolType.KAFKA:
                     KafkaConfig(**self.config)
             except Exception as e:
-                raise ValueError(f"Invalid {self.protocol.value} configuration: {str(e)}")
+                raise ValueError(f"Invalid {self.protocol} configuration: {str(e)}")
         return self
 
 

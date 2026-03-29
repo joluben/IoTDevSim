@@ -25,22 +25,29 @@ A comprehensive IoT device simulation and management platform for testing and de
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
 │  Frontend   │────▶│ API Service  │────▶│  PostgreSQL DB  │
 │  (React)    │     │  (FastAPI)   │     │                 │
-└─────────────┘     └──────────────┘     └─────────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │ Transmission │
-                    │  Service     │
-                    │ (MQTT/HTTP/  │
-                    │  Kafka)      │
-                    └──────────────┘
+└──────┬──────┘     └──────────────┘     └─────────────────┘
+       │                   │
+       │  SSE              ▼
+       │            ┌──────────────┐
+       │            │ Transmission │
+       │            │  Service     │
+       │            │ (MQTT/HTTP/  │
+       │            │  Kafka)      │
+       │            └──────────────┘
+       ▼
+┌──────────────┐
+│ Agent Service│ ◀── optional (--profile agent)
+│ (AI Chat)    │
+│ PydanticAI   │
+└──────────────┘
 ```
 
 ### Services
 
 - **API Service** (Port 8000): Main FastAPI backend for business logic
 - **Transmission Service** (Port 8001): Dedicated service for IoT device transmissions
-- **Frontend** (Port 5173): React/Type SPA
+- **Agent Service** (Port 8002): AI assistant with SSE streaming chat *(optional, `--profile agent`)*
+- **Frontend** (Port 5173): React/TypeScript SPA
 - **PostgreSQL** (Port 5432): Primary database
 - **Redis** (Port 6379): Caching and session management
 
@@ -62,6 +69,7 @@ These services are mandatory for the application to function:
 
 | Service | When to Deploy | Profile |
 |---------|----------------|---------|
+| **Agent Service** | AI-powered assistant for natural language IoT management | `agent` |
 | **MinIO** | When using `STORAGE_BACKEND=s3` for dataset storage | `storage` |
 | **Celery Worker** | For background async tasks (large dataset generation, bulk operations) | `worker` |
 
@@ -128,7 +136,26 @@ S3_SECRET_KEY=your-secret-key
 S3_REGION=us-east-1
 ```
 
-#### Option 4: With Background Workers
+#### Option 4: With AI Agent Assistant
+
+Enable the conversational AI agent for natural language IoT management:
+
+```bash
+# Start core services + agent
+docker compose --profile agent up -d
+```
+
+Configure in `.env`:
+```env
+LLM_PROVIDER=openai          # openai | anthropic | ollama
+LLM_MODEL=gpt-4o-mini        # Model name for the provider
+LLM_API_KEY=sk-proj-...      # API key (not needed for ollama)
+VITE_AGENT_SERVICE_URL=http://localhost:8002/api/v1
+```
+
+See [`agent-service/README.md`](./agent-service/README.md) for full configuration.
+
+#### Option 5: With Background Workers
 
 For heavy async workloads:
 
@@ -175,6 +202,10 @@ See `.env.example` for full list. Key variables:
 | `S3_SECRET_KEY` | ❌ | S3 secret key |
 | `TRANSMISSION_BATCH_SIZE` | ❌ | Messages per batch (default: 100) |
 | `TRANSMISSION_INTERVAL_MS` | ❌ | Transmission interval (default: 1000) |
+| `LLM_PROVIDER` | ❌ | AI agent LLM provider: `openai`, `anthropic`, `ollama` |
+| `LLM_MODEL` | ❌ | LLM model name (e.g., `gpt-4o-mini`) |
+| `LLM_API_KEY` | ❌ | API key for the LLM provider |
+| `VITE_AGENT_SERVICE_URL` | ❌ | Frontend URL to agent service |
 
 ### Database Migrations
 
@@ -205,6 +236,7 @@ alembic upgrade head
 All services expose health endpoints:
 - API Service: `GET /health` (port 8000)
 - Transmission Service: `GET /health` (port 8001)
+- Agent Service: `GET /health` (port 8002) — includes LLM provider status at `/api/v1/health`
 
 ## Quick Start (Development)
 
@@ -279,6 +311,7 @@ Key environment variables (see `.env.example` for full list):
 iot-devsim-v2/
 ├── api-service/           # FastAPI backend
 ├── transmission-service/  # Transmission handling
+├── agent-service/         # AI assistant (PydanticAI + SSE streaming)
 ├── frontend/             # React/TypeScript SPA
 ├── database/             # Database initialization
 ├── docs/                 # Project docs
@@ -308,10 +341,17 @@ iot-devsim-v2/
 
 ## Security
 
-- JWT tokens for authentication
+- JWT tokens for authentication (shared secret across services)
 - Environment variables for secrets (never commit `.env`)
 - Encrypted credentials for IoT connections
 - Circuit breaker prevents cascading failures
+- **AI Agent security** (defense-in-depth):
+  - Anti prompt-injection with 22 regex patterns (3 threat levels)
+  - Output filtering: redacts JWT tokens, API keys, PEM keys, passwords, emails
+  - Action control: forbidden/confirmation-required classification
+  - Per-user rate limiting (20 msg/min, 50 actions/session)
+  - Audit logging with hashed message content (never stored raw)
+  - Session isolation with TTL and LRU eviction
 
 ## License
 
