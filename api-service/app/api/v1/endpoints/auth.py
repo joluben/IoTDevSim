@@ -3,7 +3,7 @@ Authentication Endpoints
 Login, registration, password reset, and token management
 """
 
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPBearer
@@ -134,7 +134,7 @@ async def login(
         refresh_token = create_refresh_token(subject=str(user.id))
         
         # Update last login
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now(timezone.utc)
         await db.commit()
         
         # Create user profile
@@ -522,7 +522,7 @@ async def create_api_key_endpoint(
         # For now, we'll just return the token
         
         from datetime import datetime, timedelta
-        expires_at = datetime.utcnow() + timedelta(days=api_key_data.expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=api_key_data.expires_days)
         
         logger.info(
             "API key created",
@@ -538,7 +538,7 @@ async def create_api_key_endpoint(
             key=api_key_token,
             expires_at=expires_at.isoformat(),
             permissions=api_key_data.permissions or current_user.permissions or [],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
     except Exception as e:

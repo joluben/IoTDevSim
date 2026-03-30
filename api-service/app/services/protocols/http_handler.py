@@ -6,7 +6,7 @@ Connection testing and validation for HTTP/HTTPS protocols with advanced feature
 import asyncio
 import time
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import httpx
 import threading
@@ -77,7 +77,7 @@ class HTTPSessionManager:
             # Check if we have an existing session
             if session_key in self._sessions:
                 session_info = self._sessions[session_key]
-                session_info.last_used = datetime.utcnow()
+                session_info.last_used = datetime.now(timezone.utc)
                 session_info.request_count += 1
                 
                 # Check if session is still valid
@@ -122,8 +122,8 @@ class HTTPSessionManager:
         session_info = HTTPSessionInfo(
             client=client,
             config_hash=session_key,
-            created_at=datetime.utcnow(),
-            last_used=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            last_used=datetime.now(timezone.utc),
             request_count=1
         )
         
@@ -134,7 +134,7 @@ class HTTPSessionManager:
     
     def _cleanup_expired_sessions(self):
         """Clean up expired sessions"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired_keys = []
         
         for key, session_info in self._sessions.items():
@@ -266,7 +266,7 @@ class HTTPHandler(ProtocolHandler):
                     success=True,
                     message=f"HTTP connection successful to {http_config.endpoint_url}",
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details={**details, **test_result["details"]}
                 )
             else:
@@ -274,7 +274,7 @@ class HTTPHandler(ProtocolHandler):
                     success=False,
                     message=test_result["message"],
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details=details,
                     error_code=test_result["error_code"]
                 )
@@ -290,7 +290,7 @@ class HTTPHandler(ProtocolHandler):
                 success=False,
                 message=f"HTTP connection test failed: {error_message}",
                 duration_ms=duration_ms,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error_code=error_code
             )
     

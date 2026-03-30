@@ -8,7 +8,7 @@ import time
 from enum import Enum
 from typing import Dict, Any, Callable, Optional, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import structlog
 
 logger = structlog.get_logger()
@@ -133,7 +133,7 @@ class CircuitBreaker:
         async with self._lock:
             self.stats.success_count += 1
             self.stats.total_successes += 1
-            self.stats.last_success_time = datetime.utcnow()
+            self.stats.last_success_time = datetime.now(timezone.utc)
             
             # Reset failure count on success
             self.stats.failure_count = 0
@@ -155,7 +155,7 @@ class CircuitBreaker:
         async with self._lock:
             self.stats.failure_count += 1
             self.stats.total_failures += 1
-            self.stats.last_failure_time = datetime.utcnow()
+            self.stats.last_failure_time = datetime.now(timezone.utc)
             
             # Reset success count on failure
             self.stats.success_count = 0
@@ -186,7 +186,7 @@ class CircuitBreaker:
         if not self.stats.last_failure_time:
             return False
         
-        time_since_failure = datetime.utcnow() - self.stats.last_failure_time
+        time_since_failure = datetime.now(timezone.utc) - self.stats.last_failure_time
         return time_since_failure.total_seconds() >= self.config.recovery_timeout
     
     def _open_circuit(self):
