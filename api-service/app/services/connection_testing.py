@@ -9,7 +9,7 @@ import ipaddress
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional, List
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -103,7 +103,7 @@ class ConnectionTestingService:
                     success=False,
                     message=f"Connection with ID {connection_id} not found",
                     duration_ms=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     error_code="CONNECTION_NOT_FOUND"
                 )
             
@@ -131,7 +131,7 @@ class ConnectionTestingService:
                     success=False,
                     message=f"Connection to internal or restricted host {host_url} is not allowed",
                     duration_ms=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     error_code="SSRF_PROTECTION_ERROR"
                 )
             
@@ -142,7 +142,7 @@ class ConnectionTestingService:
                     success=False,
                     message=f"No handler available for protocol: {connection.protocol.value}",
                     duration_ms=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     error_code="PROTOCOL_NOT_SUPPORTED"
                 )
             else:
@@ -188,7 +188,7 @@ class ConnectionTestingService:
                 success=False,
                 message=f"Connection test failed: {str(e)}",
                 duration_ms=0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error_code="TEST_ERROR"
             )
     
@@ -394,7 +394,7 @@ class ConnectionTestingService:
         """
         try:
             # Calculate cutoff time for last test
-            cutoff_time = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
             
             # Get active connections that haven't been tested recently
             filters = {

@@ -9,7 +9,7 @@ Design goals:
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import httpx
@@ -37,7 +37,7 @@ class HTTPHandler(ProtocolHandler):
 
     async def test_connection(self, config: Dict[str, Any], timeout: int = 10) -> ConnectionTestResult:
         start_time = time.perf_counter()
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         try:
             http_config = HTTPConfig(**config)

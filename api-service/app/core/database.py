@@ -75,8 +75,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         
         # Optimize for write-heavy IoT workloads
         cursor.execute("SET synchronous_commit = off")  # Faster writes, slight durability trade-off
-        cursor.execute("SET wal_buffers = '16MB'")      # Larger WAL buffers
-        cursor.execute("SET checkpoint_segments = 32")   # More checkpoint segments
         cursor.execute("SET effective_io_concurrency = 200")  # SSD optimization
         
         cursor.close()

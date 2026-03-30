@@ -2,7 +2,11 @@
 Simple Configuration for Development
 """
 
+import secrets
+import structlog
+
 import os
+import sys
 from typing import List
 from dotenv import load_dotenv
 
@@ -61,7 +65,8 @@ class SimpleSettings:
         
         # Security
         self.BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
-        self.ALLOWED_HOSTS = ["*"]
+        allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost")
+        self.ALLOWED_HOSTS = [h.strip() for h in allowed_hosts.split(",") if h.strip()]
         cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
         self.CORS_ORIGINS = [
             origin.strip()
@@ -83,6 +88,66 @@ class SimpleSettings:
         # Device Management
         self.MAX_DEVICES_PER_PROJECT = int(os.getenv("MAX_DEVICES_PER_PROJECT", "1000"))
         self.MAX_DEVICE_DUPLICATION = int(os.getenv("MAX_DEVICE_DUPLICATION", "50"))
+
+        # --- Production safety checks ---
+        if self.ENVIRONMENT == "production":
+            self._validate_production_config()
+
+    def _validate_production_config(self):
+        """Validate that critical settings are properly configured for production."""
+        _logger = structlog.get_logger()
+        _insecure_defaults = [
+            "your-super-secret",
+            "CHANGE_ME",
+            "iot_password",
+            "change-in-production",
+        ]
+
+        # JWT secret must not be a default/placeholder value
+        if any(d in self.JWT_SECRET_KEY for d in _insecure_defaults):
+            _logger.critical(
+                "production_config.invalid_jwt_secret",
+                hint="Set JWT_SECRET_KEY with: openssl rand -base64 64",
+            )
+            sys.exit(1)
+
+        # Database URL must be explicitly set
+        db_password = os.getenv("POSTGRES_PASSWORD", "")
+        if not db_password or any(d in db_password for d in _insecure_defaults):
+            _logger.critical(
+                "production_config.insecure_db_password",
+                hint="Set POSTGRES_PASSWORD with: openssl rand -base64 32",
+            )
+            sys.exit(1)
+
+        # Bootstrap admin password — generate random if still default
+        if self.BOOTSTRAP_ADMIN_PASSWORD == "IotDevSim":
+            generated = secrets.token_urlsafe(16)
+            self.BOOTSTRAP_ADMIN_PASSWORD = generated
+            _logger.warning(
+                "production_config.bootstrap_admin_password_generated",
+                password=generated,
+                hint="Set BOOTSTRAP_ADMIN_PASSWORD env var to avoid auto-generation. This password is shown only once.",
+            )
+
+        # ALLOWED_HOSTS must not be wildcard
+        if "*" in self.ALLOWED_HOSTS:
+            _logger.critical(
+                "production_config.wildcard_allowed_hosts",
+                hint="Set ALLOWED_HOSTS to your production domain(s), e.g. ALLOWED_HOSTS=api.example.com",
+            )
+            sys.exit(1)
+
+        # Redis password should be set in production
+        redis_url = self.REDIS_URL
+        if "redis://redis:6379" in redis_url and ":@" not in redis_url:
+            _logger.warning(
+                "production_config.redis_no_password",
+                hint="Use REDIS_URL=redis://:PASSWORD@redis:6379/0 in production",
+            )
+
+        _logger.info("production_config.validated_ok")
+
 
 # Create settings instance
 settings = SimpleSettings()

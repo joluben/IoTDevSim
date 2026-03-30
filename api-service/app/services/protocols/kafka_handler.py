@@ -6,7 +6,7 @@ Connection testing and validation for Kafka protocol with advanced features
 import asyncio
 import time
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 import threading
 from queue import Queue, Empty
@@ -93,7 +93,7 @@ class KafkaProducerPool:
             # Check if we have an existing producer
             if producer_key in self._producers:
                 producer_info = self._producers[producer_key]
-                producer_info.last_used = datetime.utcnow()
+                producer_info.last_used = datetime.now(timezone.utc)
                 
                 self.logger.debug("Reusing existing Kafka producer", key=producer_key)
                 return producer_info.producer
@@ -158,8 +158,8 @@ class KafkaProducerPool:
         producer_info = KafkaProducerInfo(
             producer=producer,
             config_hash=producer_key,
-            created_at=datetime.utcnow(),
-            last_used=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            last_used=datetime.now(timezone.utc)
         )
         
         self._producers[producer_key] = producer_info
@@ -327,7 +327,7 @@ class KafkaHandler(ProtocolHandler):
                 success=False,
                 message="Kafka client library not installed",
                 duration_ms=0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error_code="LIBRARY_NOT_AVAILABLE"
             )
         
@@ -359,7 +359,7 @@ class KafkaHandler(ProtocolHandler):
                     success=True,
                     message=f"Kafka connection successful to {', '.join(kafka_config.bootstrap_servers)}",
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details={**details, **test_result["details"]}
                 )
             else:
@@ -367,7 +367,7 @@ class KafkaHandler(ProtocolHandler):
                     success=False,
                     message=test_result["message"],
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details=details,
                     error_code=test_result["error_code"]
                 )
@@ -383,7 +383,7 @@ class KafkaHandler(ProtocolHandler):
                 success=False,
                 message=f"Kafka connection test failed: {error_message}",
                 duration_ms=duration_ms,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error_code=error_code
             )
     

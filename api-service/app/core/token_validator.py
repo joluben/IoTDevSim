@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -63,7 +63,7 @@ class LocalJWTValidationStrategy(TokenValidationStrategy):
                 )
 
             exp = payload.get("exp")
-            if exp and datetime.utcnow() > datetime.fromtimestamp(exp):
+            if exp and datetime.now(timezone.utc) > datetime.fromtimestamp(exp, tz=timezone.utc):
                 logger.warning("Token expired", subject=subject)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,

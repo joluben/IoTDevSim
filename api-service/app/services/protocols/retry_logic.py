@@ -8,7 +8,7 @@ import random
 import time
 from typing import Callable, Any, Optional, Union, Type, Tuple
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 
 logger = structlog.get_logger()
@@ -118,7 +118,7 @@ class RetryHandler:
                     attempt_number=attempt,
                     delay=0,  # Will be set below
                     exception=e,
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.now(timezone.utc)
                 )
                 attempts.append(attempt_info)
                 

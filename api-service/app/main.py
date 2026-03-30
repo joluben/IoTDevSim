@@ -16,7 +16,7 @@ from app.core.simple_config import settings
 from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.logging import setup_logging
 from app.api.v1.router import api_router
-from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware
+from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestValidationMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.services.bootstrap_admin import ensure_bootstrap_admin_exists
 
@@ -124,6 +124,7 @@ app.add_middleware(
 # ==========================================
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestValidationMiddleware)
 
 # Add logging middleware
 app.add_middleware(LoggingMiddleware)

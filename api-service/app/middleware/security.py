@@ -8,11 +8,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 import time
 import structlog
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 from collections import defaultdict
 import asyncio
+import redis.asyncio as aioredis
 
-from app.core.simple_config import settings
+from app.core.simple_config import settings, REDIS_CONFIG
 
 logger = structlog.get_logger()
 
@@ -64,106 +65,138 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Rate limiting middleware with per-IP and per-user limits
+    Rate limiting middleware with per-IP and per-user limits.
+    Uses Redis (INCR + EXPIRE) so limits are shared across Gunicorn workers.
+    Falls back to in-memory counting when Redis is unavailable.
     """
-    
+
+    _WINDOW_SECONDS = 60
+    _KEY_PREFIX = "rl:"
+
     def __init__(self, app, calls_per_minute: int = None):
         super().__init__(app)
         self.calls_per_minute = calls_per_minute or settings.RATE_LIMIT_PER_MINUTE
-        self.requests: Dict[str, list] = defaultdict(list)
-        self.cleanup_interval = 60  # Clean up old entries every minute
-        self.last_cleanup = time.time()
-    
+        # Redis client — lazy-initialised on first request
+        self._redis: Optional[aioredis.Redis] = None
+        self._redis_available: bool = True
+        # In-memory fallback (used only when Redis is down)
+        self._fallback: Dict[str, list] = defaultdict(list)
+        self._fallback_cleanup = time.time()
+
+    async def _get_redis(self) -> Optional[aioredis.Redis]:
+        """Lazy-connect to Redis; disable on persistent failure."""
+        if not self._redis_available:
+            return None
+        if self._redis is None:
+            try:
+                self._redis = aioredis.from_url(
+                    REDIS_CONFIG["url"],
+                    decode_responses=True,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                    retry_on_timeout=True,
+                )
+                await self._redis.ping()
+                logger.info("rate_limiter.redis_connected")
+            except Exception as e:
+                logger.warning("rate_limiter.redis_unavailable, using in-memory fallback", error=str(e))
+                self._redis_available = False
+                self._redis = None
+                return None
+        return self._redis
+
     def _get_client_id(self, request: Request) -> str:
         """Get client identifier for rate limiting"""
-        # Try to get user ID from token if available
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             try:
                 from app.core.security import verify_token
                 user_id = verify_token(auth_header[7:], token_type="access")
                 return f"user:{user_id}"
-            except:
+            except Exception:
                 pass
-        
-        # Fall back to IP address
+
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
             return f"ip:{forwarded_for.split(',')[0].strip()}"
-        
+
         client_host = getattr(request.client, 'host', 'unknown')
         return f"ip:{client_host}"
-    
-    def _cleanup_old_requests(self):
-        """Clean up old request records"""
-        current_time = time.time()
-        cutoff_time = current_time - 60  # Keep only last minute
-        
-        for client_id in list(self.requests.keys()):
-            self.requests[client_id] = [
-                req_time for req_time in self.requests[client_id]
-                if req_time > cutoff_time
-            ]
-            
-            # Remove empty entries
-            if not self.requests[client_id]:
-                del self.requests[client_id]
-        
-        self.last_cleanup = current_time
-    
+
+    async def _check_redis(self, client_id: str) -> tuple[int, int]:
+        """Check and increment counter in Redis. Returns (count, remaining)."""
+        r = await self._get_redis()
+        if r is None:
+            return self._check_fallback(client_id)
+        try:
+            key = f"{self._KEY_PREFIX}{client_id}"
+            count = await r.incr(key)
+            if count == 1:
+                await r.expire(key, self._WINDOW_SECONDS)
+            ttl = await r.ttl(key)
+            remaining = max(0, self.calls_per_minute - count)
+            return count, remaining
+        except Exception as e:
+            logger.warning("rate_limiter.redis_error, falling back to in-memory", error=str(e))
+            self._redis_available = False
+            self._redis = None
+            return self._check_fallback(client_id)
+
+    def _check_fallback(self, client_id: str) -> tuple[int, int]:
+        """In-memory fallback rate limiting (single-worker only)."""
+        now = time.time()
+        # Periodic cleanup
+        if now - self._fallback_cleanup > self._WINDOW_SECONDS:
+            cutoff = now - self._WINDOW_SECONDS
+            for cid in list(self._fallback.keys()):
+                self._fallback[cid] = [t for t in self._fallback[cid] if t > cutoff]
+                if not self._fallback[cid]:
+                    del self._fallback[cid]
+            self._fallback_cleanup = now
+
+        self._fallback[client_id] = [
+            t for t in self._fallback[client_id]
+            if t > now - self._WINDOW_SECONDS
+        ]
+        self._fallback[client_id].append(now)
+        count = len(self._fallback[client_id])
+        remaining = max(0, self.calls_per_minute - count)
+        return count, remaining
+
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting for preflight CORS requests and health checks
         if request.method == "OPTIONS":
             return await call_next(request)
         if request.url.path in ["/health", "/", "/docs", "/redoc", "/openapi.json"]:
             return await call_next(request)
-        
-        current_time = time.time()
-        
-        # Periodic cleanup
-        if current_time - self.last_cleanup > self.cleanup_interval:
-            self._cleanup_old_requests()
-        
+
         client_id = self._get_client_id(request)
-        
-        # Check rate limit
-        client_requests = self.requests[client_id]
-        recent_requests = [
-            req_time for req_time in client_requests
-            if req_time > current_time - 60
-        ]
-        
-        if len(recent_requests) >= self.calls_per_minute:
+        count, remaining = await self._check_redis(client_id)
+
+        if count > self.calls_per_minute:
             logger.warning(
                 "Rate limit exceeded",
                 client_id=client_id,
-                requests_count=len(recent_requests),
+                requests_count=count,
                 limit=self.calls_per_minute,
-                path=request.url.path
+                path=request.url.path,
             )
-            
             return JSONResponse(
                 status_code=429,
                 content={
                     "error": "Rate limit exceeded",
                     "message": f"Maximum {self.calls_per_minute} requests per minute allowed",
-                    "retry_after": 60
+                    "retry_after": self._WINDOW_SECONDS,
                 },
-                headers={"Retry-After": "60"}
+                headers={"Retry-After": str(self._WINDOW_SECONDS)},
             )
-        
-        # Record this request
-        self.requests[client_id].append(current_time)
-        
-        # Process request
+
         response = await call_next(request)
-        
-        # Add rate limit headers
-        remaining = max(0, self.calls_per_minute - len(recent_requests) - 1)
+
         response.headers["X-RateLimit-Limit"] = str(self.calls_per_minute)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Reset"] = str(int(current_time + 60))
-        
+        response.headers["X-RateLimit-Reset"] = str(int(time.time() + self._WINDOW_SECONDS))
+
         return response
 
 

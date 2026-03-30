@@ -8,7 +8,7 @@ import time
 import ssl
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
@@ -68,7 +68,7 @@ class MQTTConnectionPool:
             # Check if we have an existing connection
             if connection_key in self._connections:
                 conn_info = self._connections[connection_key]
-                conn_info.last_used = datetime.utcnow()
+                conn_info.last_used = datetime.now(timezone.utc)
                 conn_info.connection_count += 1
                 
                 # Check if connection is still valid
@@ -199,8 +199,8 @@ class MQTTConnectionPool:
         conn_info = MQTTConnectionInfo(
             client=client,
             config=config,
-            created_at=datetime.utcnow(),
-            last_used=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            last_used=datetime.now(timezone.utc),
             is_connected=True,
             connection_count=1
         )
@@ -345,7 +345,7 @@ class MQTTHandler(ProtocolHandler):
                     success=True,
                     message=f"MQTT connection successful to {mqtt_config.broker_url}:{mqtt_config.port}",
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details={**details, **test_result["details"]}
                 )
             else:
@@ -353,7 +353,7 @@ class MQTTHandler(ProtocolHandler):
                     success=False,
                     message=test_result["message"],
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     details=details,
                     error_code=test_result["error_code"]
                 )
@@ -369,7 +369,7 @@ class MQTTHandler(ProtocolHandler):
                 success=False,
                 message=f"MQTT connection test failed: {error_message}",
                 duration_ms=duration_ms,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error_code=error_code
             )
     

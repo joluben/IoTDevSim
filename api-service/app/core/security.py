@@ -2,7 +2,7 @@
 Security utilities for JWT authentication and password hashing
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Any
 from joserfc import jwt as jose_jwt
 from joserfc.jwk import OctKey
@@ -57,15 +57,15 @@ def create_access_token(
         Encoded JWT token
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode = {
         "exp": int(expire.timestamp()),
         "sub": str(subject),
         "type": "access",
-        "iat": int(datetime.utcnow().timestamp())
+        "iat": int(datetime.now(timezone.utc).timestamp())
     }
     
     # Add additional claims if provided
@@ -93,15 +93,15 @@ def create_refresh_token(
         Encoded JWT refresh token
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     
     to_encode = {
         "exp": int(expire.timestamp()),
         "sub": str(subject),
         "type": "refresh",
-        "iat": int(datetime.utcnow().timestamp())
+        "iat": int(datetime.now(timezone.utc).timestamp())
     }
     
     encoded_jwt = jose_jwt.encode({"alg": ALGORITHM}, to_encode, _jwt_key)
@@ -188,7 +188,7 @@ def generate_password_reset_token(email: str) -> str:
         Password reset token
     """
     delta = timedelta(hours=1)  # Reset token expires in 1 hour
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires = now + delta
     
     to_encode = {
@@ -248,14 +248,14 @@ def create_api_key(user_id: str, name: str, expires_days: int = 365) -> str:
     Returns:
         API key token
     """
-    expire = datetime.utcnow() + timedelta(days=expires_days)
+    expire = datetime.now(timezone.utc) + timedelta(days=expires_days)
     
     to_encode = {
         "exp": int(expire.timestamp()),
         "sub": user_id,
         "type": "api_key",
         "name": name,
-        "iat": int(datetime.utcnow().timestamp())
+        "iat": int(datetime.now(timezone.utc).timestamp())
     }
     
     encoded_jwt = jose_jwt.encode({"alg": ALGORITHM}, to_encode, _jwt_key)

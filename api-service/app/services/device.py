@@ -10,7 +10,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 import structlog
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.device import Device, DeviceType, DeviceStatus
 from app.models.dataset import Dataset, DatasetStatus as DBDatasetStatus
@@ -535,7 +535,7 @@ class DeviceService:
 
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "count": len(devices),
             "devices": []
         }

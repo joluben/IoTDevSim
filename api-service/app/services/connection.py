@@ -10,7 +10,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 import structlog
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.connection import Connection, ProtocolType, ConnectionStatus
 from app.repositories.connection import connection_repository
@@ -321,7 +321,7 @@ class ConnectionService:
         # Build export data
         export_data = {
             "version": "1.0",
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "count": len(connections),
             "connections": []
         }
