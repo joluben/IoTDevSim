@@ -1,0 +1,358 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================================
+  # Stage 1 — Lint & Type Check
+  # ============================================================
+  lint-backend:
+    name: "Lint — Backend (${{ matrix.service }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-service, agent-service, transmission-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.service }}/requirements*.txt
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check --output-format=github ${{ matrix.service }}/
+
+      - name: Ruff format check
+        run: ruff format --check ${{ matrix.service }}/
+
+  lint-frontend:
+    name: "Lint — Frontend"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+  # ============================================================
+  # Stage 2 — Unit Tests
+  # ============================================================
+  test-api-service:
+    name: "Test — api-service"
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    defaults:
+      run:
+        working-directory: api-service
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: iot_devsim_test
+          POSTGRES_USER: iot_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iot_user -d iot_devsim_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://iot_user:test_password@localhost:5432/iot_devsim_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-only
+      JWT_ALGORITHM: HS256
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: api-service/requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest --cov=app --cov-report=xml --cov-report=term-missing -v
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api-service
+          path: api-service/coverage.xml
+
+  test-agent-service:
+    name: "Test — agent-service"
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    defaults:
+      run:
+        working-directory: agent-service
+    env:
+      ENVIRONMENT: development
+      LLM_PROVIDER: openai
+      LLM_MODEL: gpt-4o-mini
+      LLM_API_KEY: sk-test-not-real
+      API_SERVICE_URL: http://localhost:8000
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-only
+      REDIS_URL: redis://localhost:6379/2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: agent-service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v --tb=short
+
+  test-transmission-service:
+    name: "Test — transmission-service"
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    defaults:
+      run:
+        working-directory: transmission-service
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: iot_devsim_test
+          POSTGRES_USER: iot_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iot_user -d iot_devsim_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://iot_user:test_password@localhost:5432/iot_devsim_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: transmission-service/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run tests
+        run: pytest -v --tb=short
+
+  test-frontend:
+    name: "Test — Frontend (Vitest)"
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npx vitest run --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend
+          path: frontend/coverage/
+
+  # ============================================================
+  # Stage 3 — Docker Build Verification
+  # ============================================================
+  docker-build:
+    name: "Docker Build — ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    needs: [test-api-service, test-agent-service, test-transmission-service, test-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-service
+            context: ./api-service
+            target: production
+          - service: agent-service
+            context: ./agent-service
+            target: production
+          - service: transmission-service
+            context: ./transmission-service
+            target: production
+          - service: frontend
+            context: ./frontend
+            target: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: iot-devsim/${{ matrix.service }}:ci-${{ github.sha }}
+
+  # ============================================================
+  # Stage 4 — Security Scan
+  # ============================================================
+  security-scan-backend:
+    name: "Security — pip-audit (${{ matrix.service }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-service, agent-service, transmission-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies
+        run: pip-audit -r ${{ matrix.service }}/requirements.txt --ignore-vuln PYSEC-2024-* || true
+        continue-on-error: true
+
+  security-scan-frontend:
+    name: "Security — npm audit"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+  # ============================================================
+  # Final gate — all checks passed
+  # ============================================================
+  ci-passed:
+    name: "CI Passed"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint-backend
+      - lint-frontend
+      - test-api-service
+      - test-agent-service
+      - test-transmission-service
+      - test-frontend
+      - docker-build
+      - security-scan-backend
+      - security-scan-frontend
+    steps:
+      - name: Check all jobs
+        run: |
+          echo "Lint Backend:       ${{ needs.lint-backend.result }}"
+          echo "Lint Frontend:      ${{ needs.lint-frontend.result }}"
+          echo "Test API:           ${{ needs.test-api-service.result }}"
+          echo "Test Agent:         ${{ needs.test-agent-service.result }}"
+          echo "Test Transmission:  ${{ needs.test-transmission-service.result }}"
+          echo "Test Frontend:      ${{ needs.test-frontend.result }}"
+          echo "Docker Build:       ${{ needs.docker-build.result }}"
+          echo "Security Backend:   ${{ needs.security-scan-backend.result }}"
+          echo "Security Frontend:  ${{ needs.security-scan-frontend.result }}"
+
+          # Fail if any required job failed (security scans are advisory)
+          if [[ "${{ needs.lint-backend.result }}" == "failure" ]] || \
+             [[ "${{ needs.lint-frontend.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-api-service.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-agent-service.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-transmission-service.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-frontend.result }}" == "failure" ]] || \
+             [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
+            echo "::error::One or more required CI jobs failed"
+            exit 1
+          fi
+          echo "✅ All required CI checks passed"

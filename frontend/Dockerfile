@@ -49,8 +49,8 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config as template (envsubst will process it at startup)
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Create non-root user for nginx
 RUN addgroup -g 1001 -S nginx-group && \
@@ -61,11 +61,15 @@ RUN chown -R nginx-user:nginx-group /usr/share/nginx/html && \
     chown -R nginx-user:nginx-group /var/cache/nginx && \
     chown -R nginx-user:nginx-group /var/log/nginx && \
     chown -R nginx-user:nginx-group /etc/nginx/conf.d && \
+    chown -R nginx-user:nginx-group /etc/nginx/templates && \
     touch /var/run/nginx.pid && \
     chown -R nginx-user:nginx-group /var/run/nginx.pid
 
 # Switch to non-root user
 USER nginx-user
+
+# Default API backend URL for CSP (overridable at runtime)
+ENV API_BACKEND_URL=http://localhost:8000
 
 # Expose port
 EXPOSE 80
@@ -74,5 +78,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:80/health || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# At startup: substitute only API_BACKEND_URL in the template, then start nginx
+CMD ["sh", "-c", "envsubst '${API_BACKEND_URL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]

@@ -40,9 +40,33 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children, requiredPermission, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, user, hasPermission, hasRole } = useAuthStore();
+  const { isAuthenticated, user, hasPermission, hasRole, tokenExpiration, logout, checkSession } = useAuthStore();
 
-  if (!isAuthenticated) {
+  // Check token expiration on mount and periodically
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const check = () => {
+      const exp = useAuthStore.getState().tokenExpiration;
+      if (exp && Date.now() > exp) {
+        useAuthStore.getState().logout();
+      } else {
+        // Also trigger refresh if close to expiring
+        useAuthStore.getState().checkSession();
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  // Immediate check: if token is expired, redirect now
+  if (!isAuthenticated || (tokenExpiration && Date.now() > tokenExpiration)) {
+    if (tokenExpiration && Date.now() > tokenExpiration) {
+      // Fire-and-forget cleanup
+      logout();
+    }
     return <Navigate to={ROUTES.login} replace />;
   }
 

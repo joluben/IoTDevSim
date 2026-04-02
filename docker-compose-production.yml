@@ -60,6 +60,8 @@ services:
         VITE_ENVIRONMENT: production
     container_name: iot-devsim-frontend-prod
     restart: always
+    environment:
+      - API_BACKEND_URL=${VITE_API_URL:-http://localhost:8000}
     ports:
       - "${FRONTEND_PORT:-80}:80"
     networks:
@@ -110,6 +112,31 @@ services:
         max-file: "3"
 
   # ═════════════════════════════════════════════════════════════════
+  # Database Migrations - Run once on deploy
+  # ═════════════════════════════════════════════════════════════════
+  migrate:
+    build:
+      context: ./api-service
+      dockerfile: Dockerfile
+      target: production
+    container_name: iot-devsim-migrate
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - PYTHONPATH=/app
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - iot-network-internal
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
+
+  # ═════════════════════════════════════════════════════════════════
   # API Service - Production
   # ═════════════════════════════════════════════════════════════════
   api-service:
@@ -154,6 +181,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

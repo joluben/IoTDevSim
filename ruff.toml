@@ -1,0 +1,33 @@
+# Ruff configuration for IoT-DevSim backend services
+# https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security)
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "S101",   # use of assert (needed for tests)
+    "S104",   # possible binding to all interfaces
+    "S105",   # possible hardcoded password (too many false positives in config)
+    "S106",   # possible hardcoded password argument
+    "B008",   # do not perform function call in argument defaults (FastAPI Depends)
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S", "B"]
+"**/conftest.py" = ["S", "B"]
+"**/alembic/**" = ["E", "F401"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
