@@ -27,6 +27,59 @@ def register_dataset_tools(agent):
     """Register all dataset tools on the agent."""
 
     @agent.tool
+    async def get_dataset_details(
+        ctx: RunContext[AgentDeps],
+        dataset_id: str,
+    ) -> str:
+        """Get detailed information about a specific dataset including columns.
+
+        Args:
+            dataset_id: UUID of the dataset.
+        """
+        try:
+            data = await ctx.deps.api_client.get(
+                f"/datasets/{dataset_id}", ctx.deps.auth_token
+            )
+            name = data.get("name", "Sin nombre")
+            ds_id = data.get("id", dataset_id)
+            desc = data.get("description", "Sin descripción")
+            status = data.get("status", "?")
+            source = data.get("source", "?")
+            rows = data.get("row_count", "?")
+            cols = data.get("column_count", "?")
+            tags = data.get("tags", [])
+            created = data.get("created_at", "?")
+            updated = data.get("updated_at", "?")
+
+            lines = [
+                f"📊 **{name}** (`{ds_id}`)",
+                f"- **Estado**: {status}",
+                f"- **Fuente**: {source}",
+                f"- **Filas**: {rows} | **Columnas**: {cols}",
+                f"- **Descripción**: {desc}",
+            ]
+            if tags:
+                lines.append(f"- **Etiquetas**: {', '.join(tags)}")
+            lines.extend([
+                f"- **Creado**: {created}",
+                f"- **Actualizado**: {updated}",
+            ])
+
+            # Include column details
+            columns = data.get("columns", [])
+            if columns:
+                lines.append("\n**Columnas**:")
+                for col in columns:
+                    col_name = col.get("name", "?")
+                    col_type = col.get("data_type", "?")
+                    lines.append(f"  - {col_name} ({col_type})")
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error("get_dataset_details failed", error=str(e))
+            return f"❌ Error al obtener detalles del dataset: {e}"
+
+    @agent.tool
     async def list_datasets(
         ctx: RunContext[AgentDeps],
         search: str = "",
@@ -170,3 +223,65 @@ def register_dataset_tools(agent):
         except Exception as e:
             logger.error("get_available_generators failed", error=str(e))
             return f"Error al obtener generadores: {e}"
+
+    @agent.tool
+    async def update_dataset_metadata(
+        ctx: RunContext[AgentDeps],
+        dataset_id: str,
+        name: str = "",
+        description: str = "",
+        tags: list[str] = [],
+    ) -> str:
+        """Update a dataset's metadata (name, description, tags). Does NOT modify data content.
+
+        Args:
+            dataset_id: UUID of the dataset to update.
+            name: New name for the dataset (optional).
+            description: New description (optional).
+            tags: New list of tags (optional, replaces existing tags).
+        """
+        payload: dict[str, str | list[str]] = {}
+        if name:
+            payload["name"] = name
+        if description:
+            payload["description"] = description
+        if tags:
+            payload["tags"] = tags
+
+        if not payload:
+            return "⚠️ No se proporcionaron campos para actualizar."
+
+        try:
+            result = await ctx.deps.api_client.put(
+                f"/datasets/{dataset_id}", ctx.deps.auth_token, data=payload
+            )
+            ds_name = result.get("name", "?")
+            ds_id = result.get("id", dataset_id)
+            return f"✅ Dataset actualizado: **{ds_name}** (`{ds_id}`)"
+        except Exception as e:
+            logger.error("update_dataset_metadata failed", error=str(e))
+            return f"❌ Error al actualizar dataset: {e}"
+
+    @agent.tool
+    async def delete_dataset(
+        ctx: RunContext[AgentDeps],
+        dataset_id: str,
+        hard_delete: bool = False,
+    ) -> str:
+        """Delete a dataset (soft delete by default, or hard delete).
+
+        Args:
+            dataset_id: UUID of the dataset to delete.
+            hard_delete: If True, permanently deletes the dataset and its data file.
+        """
+        try:
+            await ctx.deps.api_client.delete(
+                f"/datasets/{dataset_id}",
+                ctx.deps.auth_token,
+                params={"hard_delete": hard_delete} if hard_delete else {}
+            )
+            delete_type = "eliminado permanentemente" if hard_delete else "marcado como eliminado"
+            return f"✅ Dataset `{dataset_id}` {delete_type}."
+        except Exception as e:
+            logger.error("delete_dataset failed", error=str(e))
+            return f"❌ Error al eliminar dataset: {e}"

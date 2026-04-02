@@ -4,12 +4,14 @@ POST /api/v1/agent/chat  — SSE streaming chat
 GET  /api/v1/agent/suggestions — contextual suggestions
 """
 
+import asyncio
 import json
+from collections.abc import AsyncIterable
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic_ai import UsageLimits
+from pydantic_ai import AgentStreamEvent, FunctionToolCallEvent, FunctionToolResultEvent, RunContext, UsageLimits
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from app.core.security import get_current_user, TokenPayload, security_scheme
@@ -149,8 +151,55 @@ async def agent_chat(
         response_tokens_limit=4096,
     )
 
+    # Queue to bridge event_stream_handler tool events into the SSE generator
+    tool_event_queue: asyncio.Queue[dict | None] = asyncio.Queue()
+    # Map tool_call_id → tool_name so we can label completed events
+    _tool_call_names: dict[str, str] = {}
+
+    async def _event_stream_handler(
+        ctx: RunContext[AgentDeps],
+        event_stream: AsyncIterable[AgentStreamEvent],
+    ) -> None:
+        """Capture tool call / result events and push them into the queue."""
+        async for event in event_stream:
+            if isinstance(event, FunctionToolCallEvent):
+                _tool_call_names[event.part.tool_call_id] = event.part.tool_name
+                await tool_event_queue.put({
+                    "type": "tool_call",
+                    "tool_name": event.part.tool_name,
+                    "status": "running",
+                })
+            elif isinstance(event, FunctionToolResultEvent):
+                tool_name = _tool_call_names.get(event.tool_call_id, "unknown")
+                await tool_event_queue.put({
+                    "type": "tool_call",
+                    "tool_name": tool_name,
+                    "status": "completed",
+                })
+
     async def event_stream():
         """Generate SSE events from PydanticAI agent streaming with output filtering."""
+        # Track if background draining is active
+        drain_task: asyncio.Task | None = None
+
+        async def _drain_queue_continuously():
+            """Background task to continuously drain tool events from the queue."""
+            while True:
+                try:
+                    # Wait for an event with timeout to allow clean cancellation
+                    tool_evt = await asyncio.wait_for(tool_event_queue.get(), timeout=0.5)
+                    if tool_evt:
+                        # We can't yield directly from background task, so we use a sentinel
+                        # Actually, we need to yield from the main generator
+                        # Use a side channel or just let it queue up and drain in main loop
+                        pass
+                except asyncio.TimeoutError:
+                    continue
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    break
+
         try:
             # Send session_id as first event
             yield f"data: {json.dumps({'type': 'session', 'session_id': session.session_id})}\n\n"
@@ -160,11 +209,48 @@ async def agent_chat(
                 deps=deps,
                 message_history=session.get_history(),
                 usage_limits=usage_limits,
+                event_stream_handler=_event_stream_handler,
             ) as result:
-                async for chunk in result.stream_text(delta=True):
-                    # --- Layer 4: Output filtering on each chunk ---
-                    safe_chunk = filter_output(chunk)
-                    yield f"data: {json.dumps({'type': 'content', 'content': safe_chunk})}\n\n"
+                # Use asyncio.gather or interleaved draining for better responsiveness
+                text_iterator = result.stream_text(delta=True).__aiter__()
+                chunk: str | None = None
+                done = False
+
+                while not done:
+                    # Try to get next text chunk with timeout (allows interleaved draining)
+                    try:
+                        chunk = await asyncio.wait_for(
+                            text_iterator.__anext__(),
+                            timeout=0.1
+                        )
+                    except asyncio.TimeoutError:
+                        chunk = None
+                    except StopAsyncIteration:
+                        done = True
+                        chunk = None
+
+                    # Drain ALL queued tool events before (and between) text chunks
+                    while True:
+                        try:
+                            tool_evt = tool_event_queue.get_nowait()
+                            if tool_evt:
+                                yield f"data: {json.dumps(tool_evt)}\n\n"
+                        except asyncio.QueueEmpty:
+                            break
+
+                    # Yield text chunk if we got one
+                    if chunk is not None:
+                        safe_chunk = filter_output(chunk)
+                        yield f"data: {json.dumps({'type': 'content', 'content': safe_chunk})}\n\n"
+
+                # Final drain after streaming ends
+                while not tool_event_queue.empty():
+                    try:
+                        tool_evt = tool_event_queue.get_nowait()
+                        if tool_evt:
+                            yield f"data: {json.dumps(tool_evt)}\n\n"
+                    except asyncio.QueueEmpty:
+                        break
 
                 # Save conversation to session memory
                 session.add_turn(result.all_messages())

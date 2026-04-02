@@ -29,6 +29,11 @@ export interface ApiErrorResponse {
 class ApiClient {
   private api: AxiosInstance;
   private onUnauthorized?: () => void;
+  private isRefreshing = false;
+  private failedQueue: Array<{
+    resolve: (value: unknown) => void;
+    reject: (error: unknown) => void;
+  }> = [];
 
   constructor() {
     this.api = axios.create({
@@ -40,6 +45,17 @@ class ApiClient {
     });
 
     this.setupInterceptors();
+  }
+
+  private processQueue(error: unknown, token: string | null): void {
+    this.failedQueue.forEach(({ resolve, reject }) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(token);
+      }
+    });
+    this.failedQueue = [];
   }
 
   private setupInterceptors(): void {
@@ -77,13 +93,59 @@ class ApiClient {
       }
     );
 
-    // Response interceptor
+    // Response interceptor with token refresh on 401
     this.api.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        // Handle 401 Unauthorized
-        if (error.response?.status === 401 && this.onUnauthorized) {
-          this.onUnauthorized();
+      async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+        // Handle 401 Unauthorized — attempt token refresh before logging out
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          if (this.isRefreshing) {
+            // Queue request while refresh is in progress
+            return new Promise((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject });
+            }).then((token) => {
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+              }
+              return this.api(originalRequest);
+            });
+          }
+
+          originalRequest._retry = true;
+          this.isRefreshing = true;
+
+          try {
+            const refreshToken = TokenStorage.getRefreshToken();
+            if (!refreshToken) throw new Error('No refresh token');
+
+            const response = await axios.post(
+              `${API_CONFIG.baseUrl}/auth/refresh`,
+              { refreshToken },
+              { headers: { 'Content-Type': 'application/json' }, timeout: API_CONFIG.timeout }
+            );
+
+            const { token: newToken, refreshToken: newRefreshToken } = response.data;
+            TokenStorage.setToken(newToken);
+            if (newRefreshToken) TokenStorage.setRefreshToken(newRefreshToken);
+
+            this.processQueue(null, newToken);
+
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            }
+            return this.api(originalRequest);
+          } catch (refreshError) {
+            this.processQueue(refreshError, null);
+            // Refresh failed — force logout
+            if (this.onUnauthorized) {
+              this.onUnauthorized();
+            }
+            return Promise.reject(this.handleError(error));
+          } finally {
+            this.isRefreshing = false;
+          }
         }
 
         return Promise.reject(this.handleError(error));
