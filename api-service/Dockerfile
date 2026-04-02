@@ -66,9 +66,9 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://0.0.0.0:8000/health || exit 1
+# Health check - simplified (just check root endpoint)
+HEALTHCHECK --interval=5s --timeout=3s --start-period=60s --retries=5 \
+    CMD curl -f http://localhost:8000/ || exit 1
 
 # Production command - use API_PORT env var (defaults to 8000)
 CMD ["sh", "-c", "gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${API_PORT:-8000}"]
